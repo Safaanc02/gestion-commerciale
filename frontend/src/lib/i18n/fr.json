@@ -829,6 +829,8 @@
   "scaleStation.printing": "Impression…",
   "scaleStation.searchPlaceholder": "Rechercher un produit en vrac ou son code",
   "scaleStation.title": "Poste balance",
+  "settings.touchKeyboardHint": "Pour un écran tactile sans clavier physique",
+  "settings.touchKeyboard": "Clavier à l’écran",
   "settings.paperSizeA5": "A5 (feuille)",
   "settings.aboutDescription": "FloPOS est une caisse gratuite pour toujours et open source, faite pour les cafés, restaurants, boulangeries, camions-restaurants, cuisines virtuelles et bars. Elle comprend la prise de commandes, les tables, les menus, l'écran cuisine, l'impression des tickets, les accès du personnel et le stockage des données en local. Téléchargez-la, lancez le service, gardez vos données et restez maître de votre caisse.",
   "settings.aboutFloCafe": "À propos de FloCafe",

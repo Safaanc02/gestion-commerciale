@@ -3227,6 +3227,19 @@ export default function SettingsPage() {
                     <option value="thermal80">{t('settings.paperSize80')}</option>
                     <option value="a5">{t('settings.paperSizeA5')}</option>
                   </select>
+
+                  <label className="mt-4 flex items-center justify-between gap-4 rounded-lg border border-border p-3">
+                    <span className="flex flex-col gap-0.5">
+                      <span className="text-sm font-medium text-foreground">{t('settings.touchKeyboard')}</span>
+                      <span className="text-xs text-muted-foreground">{t('settings.touchKeyboardHint')}</span>
+                    </span>
+                    <input
+                      type="checkbox"
+                      checked={posSettings.touchKeyboard}
+                      onChange={(e) => posSettings.setTouchKeyboard(e.target.checked)}
+                      className="h-5 w-9 shrink-0 accent-[color:var(--color-brand)]"
+                    />
+                  </label>
                 </div>
               </div>
             </div>

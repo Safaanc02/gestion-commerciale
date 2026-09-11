@@ -829,6 +829,8 @@
   "scaleStation.printing": "A imprimir…",
   "scaleStation.searchPlaceholder": "Procurar um produto a granel ou o seu código",
   "scaleStation.title": "Estação de balança",
+  "settings.touchKeyboardHint": "Para um ecrã tátil sem teclado físico",
+  "settings.touchKeyboard": "Teclado no ecrã",
   "settings.paperSizeA5": "A5 (folha)",
   "settings.aboutDescription": "O FloPOS é um PDV de restaurante gratuito para sempre e de código aberto para cafeterias, restaurantes, padarias, food trucks, dark kitchens e bares. Inclui pedidos, mesas, menus, display de cozinha, impressão de comprovantes, acesso da equipe e armazenamento local de dados. Baixe, execute o serviço, mantenha seus dados e seja dono do seu PDV.",
   "settings.aboutFloCafe": "Sobre o FloCafe",

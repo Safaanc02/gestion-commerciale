@@ -5,6 +5,7 @@ import AppSidebar from '@/components/layout/Sidebar';
 import AuthGuard from '@/components/layout/AuthGuard';
 import { SidebarProvider, SidebarInset } from '@/components/ui/sidebar';
 import StatusBar from '@/components/layout/StatusBar';
+import OnScreenKeyboard from '@/components/ui/OnScreenKeyboard';
 import GlobalNotifications from '@/components/layout/GlobalNotifications';
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
@@ -28,6 +29,11 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           }>
             {children}
           </div>
+          {/* Under the workspace and above the status bar, so it pushes the
+              screen up rather than covering the field being typed into. One
+              instance for the whole application: it writes into whatever field
+              was tapped. */}
+          <OnScreenKeyboard />
           <StatusBar />
         </SidebarInset>
       </SidebarProvider>

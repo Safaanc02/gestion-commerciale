@@ -829,6 +829,8 @@
   "scaleStation.printing": "Printing…",
   "scaleStation.searchPlaceholder": "Search a bulk product or its code",
   "scaleStation.title": "Scale station",
+  "settings.touchKeyboardHint": "For a touch screen with no keyboard attached",
+  "settings.touchKeyboard": "On-screen keyboard",
   "settings.paperSizeA5": "A5 (sheet)",
   "settings.aboutDescription": "FloPOS is a free forever, open-source restaurant POS for cafes, restaurants, bakeries, food trucks, cloud kitchens, and bars. It includes ordering, tables, menus, kitchen display, receipt printing, staff access, and local data storage. Download it, run service, keep your data, and own your POS.",
   "settings.aboutFloCafe": "About FloCafe",

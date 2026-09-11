@@ -13,6 +13,12 @@ export interface PosSettingsState {
   // the typed digits form a valid number for the tenant's country, so
   // cashiers don't have to tab/click over manually.
   enforcePhoneLength: boolean;
+  /**
+   * Show the on-screen keyboard. A till terminal has no keyboard attached; the
+   * manager's laptop does. Kept per device, not per shop, because that is what
+   * it describes — and persisted, so a terminal does not forget between shifts.
+   */
+  touchKeyboard: boolean;
   billingType: 'postpaid' | 'prepaid';
   tablesRequired: boolean;
   // UI language for i18n routing. Synced from tenant on auth load.
@@ -71,6 +77,7 @@ export interface PosSettingsState {
   setBillShowAddress: (v: boolean) => void;
   setBillShowPhone: (v: boolean) => void;
   setBillShowTaxId: (v: boolean) => void;
+  setTouchKeyboard: (v: boolean) => void;
   setBillingType: (v: 'postpaid' | 'prepaid') => void;
   setTablesRequired: (v: boolean) => void;
   setPrinterUseUnicode: (v: boolean) => void;
@@ -91,6 +98,7 @@ export const usePosSettingsStore = create<PosSettingsState>()(
       showProductImages: false,
       customerMandatory: false,
       enforcePhoneLength: false,
+      touchKeyboard: true,
       billingType: 'postpaid',
       tablesRequired: true,
       language: 'en',
@@ -144,6 +152,7 @@ export const usePosSettingsStore = create<PosSettingsState>()(
       setBillShowAddress: (v) => set({ billShowAddress: v }),
       setBillShowPhone: (v) => set({ billShowPhone: v }),
       setBillShowTaxId: (v) => set({ billShowTaxId: v }),
+      setTouchKeyboard: (v: boolean) => set({ touchKeyboard: v }),
       setBillingType: (v) => set({ billingType: v }),
       setTablesRequired: (v) => set({ tablesRequired: v }),
       setPrinterUseUnicode: (v) => set({ printerUseUnicode: v }),

@@ -829,6 +829,8 @@
   "scaleStation.printing": "Imprimiendo…",
   "scaleStation.searchPlaceholder": "Buscar un producto a granel o su código",
   "scaleStation.title": "Estación de balanza",
+  "settings.touchKeyboardHint": "Para una pantalla táctil sin teclado físico",
+  "settings.touchKeyboard": "Teclado en pantalla",
   "settings.paperSizeA5": "A5 (hoja)",
   "settings.aboutDescription": "FloPOS es un POS para restaurantes de código abierto y gratuito para siempre, para cafeterías, restaurantes, panaderías, camiones de comida, cocinas fantasma y bares. Incluye pedidos, mesas, menús, pantalla de cocina, impresión de recibos, acceso de personal y almacenamiento de datos local. Descárgalo, ejecuta el servicio, mantén tus datos y sé dueño de tu POS.",
   "settings.aboutFloCafe": "Acerca de FloCafe",
