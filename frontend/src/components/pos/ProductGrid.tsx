@@ -1,6 +1,8 @@
 'use client';
 
-import { Search, SlidersHorizontal } from 'lucide-react';
+import { useState } from 'react';
+
+import { ChevronLeft, ChevronRight, Search, SlidersHorizontal } from 'lucide-react';
 import type { Category, Product } from '@/lib/types';
 import { useCartStore } from '@/store/cart';
 import { usePosSettingsStore } from '@/store/pos-settings';
@@ -31,6 +33,44 @@ const CATEGORY_COLORS: Record<string, { bg: string; text: string; border: string
   rose: { bg: 'bg-rose-50', text: 'text-rose-700', border: 'border-rose-200', activeBg: 'bg-rose-500', activeText: 'text-white' },
 };
 
+/**
+ * Two letters for a product with no photograph.
+ *
+ * Taken from the first word that actually starts with a letter: catalogue
+ * names routinely begin with a size or a count ("10 Capsules…", "500g …"),
+ * and slicing the raw string gave every one of them the same meaningless
+ * digits.
+ */
+function initialsFor(name: string): string {
+  const word = (name || '').split(/\s+/).find((w) => /^\p{L}/u.test(w));
+  return (word || name || '?').slice(0, 2).toUpperCase();
+}
+
+/**
+ * A shelf's colour.
+ *
+ * The till being replaced colours every tile, which is what makes it quick to
+ * scan — but its colours are per product and look arbitrary: three neighbours
+ * from the same shelf come out magenta, cyan and orange. Here the colour comes
+ * from the shelf, so a block of one colour is a block of one aisle and the eye
+ * can use it. The twelve grounds are pale on purpose: each clears 12:1 against
+ * the tile text, so the price stays the most legible thing on it.
+ */
+const SHELF_TINTS = [
+  '#E3F0E8', '#E4ECF7', '#FBEEE0', '#F6E6EF', '#E7F1F4', '#F3EFDC',
+  '#EDE7F5', '#FBE9E7', '#E8F3E1', '#F0ECE4', '#E2F0F0', '#F7EAF0',
+];
+
+function shelfTint(categoryId: string | number | null | undefined): string {
+  const key = String(categoryId ?? '');
+  if (!key) return SHELF_TINTS[0];
+  // Deterministic: the same shelf keeps its colour between sessions, which is
+  // the whole point — a cashier learns "the blue block is tea".
+  let hash = 0;
+  for (let i = 0; i < key.length; i++) hash = (hash * 31 + key.charCodeAt(i)) >>> 0;
+  return SHELF_TINTS[hash % SHELF_TINTS.length];
+}
+
 function getCategoryColorClasses(color: string | null | undefined) {
   if (!color) return null;
   return CATEGORY_COLORS[color.toLowerCase()] || null;
@@ -45,29 +85,60 @@ interface Props {
   setSearch: (s: string) => void;
   currency: string;
   onProductClick: (product: Product) => void;
+  /** Resolve a typed or pasted code server-side; resolves true when handled. */
+  onScan: (code: string) => Promise<boolean>;
   sidebarOpen?: boolean;
+  /** The register puts the shelves in a standing grid of their own. */
+  hideCategoryBar?: boolean;
 }
 
 export default function ProductGrid({
   categories, products, selectedCategory, setSelectedCategory,
-  search, setSearch, onProductClick, sidebarOpen = true,
+  search, setSearch, onProductClick, onScan, sidebarOpen = true, hideCategoryBar = false,
 }: Props) {
+  const [page, setPage] = useState(0);
   const cart = useCartStore();
   const { showProductImages } = usePosSettingsStore();
   const { t } = useI18n();
   const fmt = useFormatCurrency();
 
-  const filtered = products.filter((p) => {
+  // A new shelf or a new search starts at its first page, never mid-list.
+  // Adjusted during render rather than in an effect — React's own guidance for
+  // resetting state when a prop changes, and the pattern the dashboard uses:
+  // an effect here would render the wrong page once before correcting itself.
+  const filterKey = `${selectedCategory ?? ''}:${search}`;
+  const [syncedFilter, setSyncedFilter] = useState(filterKey);
+  if (filterKey !== syncedFilter) {
+    setSyncedFilter(filterKey);
+    setPage(0);
+  }
+
+  const matching = products.filter((p) => {
     const matchCat = !selectedCategory || p.category_id === selectedCategory;
     const matchSearch = !search || p.name.toLowerCase().includes(search.toLowerCase());
     return matchCat && matchSearch;
   });
 
+  /**
+   * How many tiles actually reach the page.
+   *
+   * The shop's catalogue is 3661 products. Drawn all at once that is north of
+   * twenty thousand DOM nodes, and the till spends its time on layout instead
+   * of on the scan — the whole screen settles late, not just this grid. Nobody
+   * finds a product by scrolling past three thousand either: it is a barcode,
+   * a shelf, or a search. So the list is bounded and says what it is holding
+   * back, rather than pretending the rest does not exist.
+   */
+  const PAGE_SIZE = 120;
+  const pageCount = Math.max(1, Math.ceil(matching.length / PAGE_SIZE));
+  const safePage = Math.min(page, pageCount - 1);
+  const filtered = matching.slice(safePage * PAGE_SIZE, (safePage + 1) * PAGE_SIZE);
+
   return (
     <div data-testid="pos-product-grid" className="flex-1 flex flex-col min-w-0 h-full overflow-hidden">
       <div className="shrink-0 mb-3">
         <div className="relative mb-2">
-          <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+          <Search size={18} className="absolute start-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
           <input
             type="text"
             value={search}
@@ -78,21 +149,24 @@ export default function ProductGrid({
               // action into this field works regardless of typing speed.
               const trimmed = search.trim();
               if (!trimmed) return;
-              const match = products.find((p) => p.barcode === trimmed);
-              if (match) {
-                onProductClick(match);
-                setSearch('');
-              }
+              // Routed through the same server resolution as a scanner read, so
+              // a typed scale label works too and neither path can drift from
+              // the other. A local products.find() here would silently miss
+              // every label and every product added since this screen loaded.
+              void onScan(trimmed).then((handled) => {
+                if (handled) setSearch('');
+              });
             }}
             placeholder={t('pos.searchProducts')}
-            className="w-full pl-9 pr-4 py-2 bg-white border border-gray-200 rounded-xl focus:border-brand outline-none transition-colors text-sm"
+            className="w-full ps-10 pe-4 py-3 bg-card border border-border rounded-xl focus:border-brand focus:ring-2 focus:ring-brand/20 outline-none transition-colors text-base"
           />
         </div>
-        <div className="flex flex-wrap gap-2 pb-1">
+        {!hideCategoryBar && (
+        <div className="flex gap-2 pb-1 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           <button
             onClick={() => setSelectedCategory(null)}
-            className={`px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-colors ${
-              !selectedCategory ? 'bg-brand text-white' : 'bg-white text-gray-700 border border-gray-200 hover:bg-gray-50'
+            className={`shrink-0 px-4 py-2.5 rounded-lg text-sm font-medium whitespace-nowrap transition-colors ${
+              !selectedCategory ? 'bg-brand text-white' : 'bg-card text-foreground/80 border border-border hover:bg-muted/60'
             }`}
           >
             {t('pos.allCategories')}
@@ -104,14 +178,14 @@ export default function ProductGrid({
               <button
                 key={cat.id}
                 onClick={() => setSelectedCategory(cat.id)}
-                className={`px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-colors ${
+                className={`shrink-0 px-4 py-2.5 rounded-lg text-sm font-medium whitespace-nowrap transition-colors ${
                   isSelected
                     ? colorClasses
                       ? `${colorClasses.activeBg} ${colorClasses.activeText}`
                       : 'bg-brand text-white'
                     : colorClasses
                       ? `${colorClasses.bg} ${colorClasses.text} border ${colorClasses.border} hover:opacity-80`
-                      : 'bg-white text-gray-700 border border-gray-200 hover:bg-gray-50'
+                      : 'bg-card text-foreground/80 border border-border hover:bg-muted/60'
                 }`}
               >
                 {cat.name}
@@ -119,13 +193,20 @@ export default function ProductGrid({
             );
           })}
         </div>
+        )}
       </div>
 
       <div className="flex-1 overflow-y-auto pb-20 md:pb-0">
-        <div className={`grid gap-3 ${
-          sidebarOpen 
-            ? 'grid-cols-4' 
-            : 'grid-cols-5'
+        {/* Sized for fingers, not a mouse pointer.
+            The column count now follows the screen rather than the sidebar
+            alone: at 768px the previous fixed 4 columns left roughly 51px per
+            tile, which is smaller than a fingertip. Tiles are also given a
+            minimum height so a one-word product name and a three-line one are
+            the same size and the grid does not jump as the cashier scrolls. */}
+        <div className={`grid gap-2 grid-cols-3 sm:grid-cols-4 ${
+          sidebarOpen
+            ? 'lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6'
+            : 'lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-7'
         }`}>
           {filtered.map((product) => {
             const inCartQty = cart.items
@@ -138,23 +219,24 @@ export default function ProductGrid({
                 key={product.id}
                 data-testid="pos-product-card"
                 onClick={() => onProductClick(product)}
-                className="bg-white rounded-xl p-2.5 border border-gray-100 hover:border-brand/40 hover:shadow-md transition-all text-left relative group cursor-pointer overflow-hidden"
+                className="rounded-lg p-2 min-h-[5.5rem] flex flex-col justify-between border border-black/5 hover:border-brand/50 active:scale-[0.98] hover:shadow-sm transition-all text-start relative group cursor-pointer overflow-hidden select-none"
+                style={{ backgroundColor: shelfTint(product.category_id) }}
               >
                 {!!product.track_inventory && (
                   <>
                     {product.stock_quantity <= 0 ? (
-                      <span className="absolute top-2 left-2 bg-red-100 text-red-700 text-[10px] font-bold px-2 py-0.5 rounded-full z-10 shadow-sm border border-red-200 pointer-events-none">
+                      <span className="absolute top-2 start-2 bg-red-100 text-red-700 text-[10px] font-bold px-2 py-0.5 rounded-full z-10 shadow-sm border border-red-200 pointer-events-none">
                         {t('pos.outOfStock')}
                       </span>
                     ) : product.stock_quantity <= (product.low_stock_threshold || 0) ? (
-                      <span className="absolute top-2 left-2 bg-orange-100 text-orange-700 text-[10px] font-bold px-2 py-0.5 rounded-full z-10 shadow-sm border border-orange-200 pointer-events-none">
+                      <span className="absolute top-2 start-2 bg-orange-100 text-orange-700 text-[10px] font-bold px-2 py-0.5 rounded-full z-10 shadow-sm border border-orange-200 pointer-events-none">
                         {t('pos.lowStock')}
                       </span>
                     ) : null}
                   </>
                 )}
                 {inCartQty > 0 && (
-                  <span className="absolute top-0 right-0 bg-brand text-white text-xs w-6 h-6 rounded-bl-lg flex items-center justify-center font-bold z-10">
+                  <span className="absolute top-0 end-0 bg-brand text-white text-sm w-8 h-8 rounded-es-xl flex items-center justify-center font-bold z-10">
                     {inCartQty}
                   </span>
                 )}
@@ -167,7 +249,7 @@ export default function ProductGrid({
                       style={{ backgroundColor: nameToColor(product.name) }}
                     >
                       <span className="text-2xl font-bold text-white/80">
-                        {product.name.substring(0, 2).toUpperCase()}
+                        {initialsFor(product.name)}
                       </span>
                     </div>
 
@@ -184,16 +266,19 @@ export default function ProductGrid({
                     )}
 
                     {product.tags && product.tags.length > 0 && (
-                      <span className="absolute bottom-1.5 right-1.5 z-10">
+                      <span className="absolute bottom-1.5 end-1.5 z-10">
                         <TagBadge tag={product.tags[0]} />
                       </span>
                     )}
                   </div>
                 )}
 
-                <h3 className="font-medium text-gray-900 text-sm line-clamp-2 leading-snug">{product.name}</h3>
+                {/* Name then price, with the price given real weight: on a
+                    shelf-scanning screen the cashier is confirming an amount,
+                    not reading a menu. */}
+                <h3 className="font-medium text-[#1F2A24] text-xs line-clamp-3 leading-tight">{product.name}</h3>
                 <div className="flex items-center justify-between mt-1">
-                  <p className="text-brand font-bold">
+                  <p className="text-[#123D2B] text-base font-bold tabular-nums">
                     {fmt(Number(product.price))}
                   </p>
                   <div className="flex items-center gap-1 shrink-0">
@@ -206,7 +291,7 @@ export default function ProductGrid({
                           e.stopPropagation();
                           onProductClick(product);
                         }}
-                        className="text-gray-400 hover:text-gray-600 transition-colors"
+                        className="text-muted-foreground hover:text-muted-foreground transition-colors"
                         title={t('pos.customisable')}
                       >
                         <SlidersHorizontal size={12} />
@@ -220,6 +305,32 @@ export default function ProductGrid({
           })}
         </div>
       </div>
+
+      {pageCount > 1 && (
+        <div className="flex shrink-0 items-center justify-center gap-3 pt-2">
+          <button
+            onClick={() => setPage((p) => Math.max(0, p - 1))}
+            disabled={safePage === 0}
+            aria-label={t('common.previous')}
+            className="rounded-md border border-border bg-card px-4 py-2 text-foreground transition-colors hover:bg-muted disabled:opacity-40"
+          >
+            <ChevronRight size={18} className="rtl:hidden" />
+            <ChevronLeft size={18} className="hidden rtl:block" />
+          </button>
+          <span className="text-xs tabular-nums text-muted-foreground">
+            {safePage + 1} / {pageCount}
+          </span>
+          <button
+            onClick={() => setPage((p) => Math.min(pageCount - 1, p + 1))}
+            disabled={safePage >= pageCount - 1}
+            aria-label={t('common.next')}
+            className="rounded-md border border-border bg-card px-4 py-2 text-foreground transition-colors hover:bg-muted disabled:opacity-40"
+          >
+            <ChevronLeft size={18} className="rtl:hidden" />
+            <ChevronRight size={18} className="hidden rtl:block" />
+          </button>
+        </div>
+      )}
     </div>
   );
 }
