@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' 'unsafe-inline'">
+  <title>Flo — Configuration du poste</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: linear-gradient(135deg, #0078D7 0%, #005A9E 100%);
+      min-height: 100vh; display: flex; align-items: center; justify-content: center;
+      color: #fff; padding: 24px;
+    }
+    .card { width: 100%; max-width: 640px; }
+    h1 { font-size: 26px; font-weight: 600; margin-bottom: 6px; }
+    .lead { opacity: .85; margin-bottom: 24px; line-height: 1.5; }
+    .roles { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+    @media (max-width: 560px) { .roles { grid-template-columns: 1fr; } }
+    .role {
+      background: rgba(255,255,255,.1); border: 2px solid rgba(255,255,255,.25);
+      border-radius: 14px; padding: 20px; cursor: pointer; text-align: left;
+      color: #fff; font: inherit; transition: background .15s, border-color .15s;
+    }
+    .role:hover { background: rgba(255,255,255,.16); }
+    .role[aria-pressed="true"] { border-color: #fff; background: rgba(255,255,255,.22); }
+    .role .icon { font-size: 30px; }
+    .role .name { font-size: 17px; font-weight: 600; margin: 8px 0 6px; }
+    .role .desc { font-size: 13px; opacity: .85; line-height: 1.45; }
+    .panel { margin-top: 20px; display: none; }
+    .panel.visible { display: block; }
+    label { display: block; font-size: 13px; opacity: .85; margin-bottom: 6px; }
+    .row { display: flex; gap: 10px; }
+    input {
+      flex: 1; padding: 13px 14px; border-radius: 10px; border: 1px solid rgba(255,255,255,.3);
+      background: rgba(255,255,255,.12); color: #fff; font-size: 16px; outline: none;
+    }
+    input::placeholder { color: rgba(255,255,255,.55); }
+    input:focus { border-color: #fff; }
+    button.action {
+      padding: 13px 20px; border-radius: 10px; border: none; cursor: pointer;
+      font-size: 15px; font-weight: 600; background: #fff; color: #005A9E;
+    }
+    button.action:disabled { opacity: .5; cursor: default; }
+    button.ghost { background: rgba(255,255,255,.16); color: #fff; }
+    .hint { font-size: 13px; opacity: .8; margin-top: 10px; line-height: 1.5; }
+    .status { margin-top: 14px; font-size: 14px; min-height: 20px; }
+    .status.error { color: #ffd0d0; }
+    .status.ok { color: #d4ffd6; }
+    .found { margin-top: 10px; display: flex; flex-wrap: wrap; gap: 8px; }
+    .found button { padding: 8px 12px; border-radius: 999px; border: 1px solid rgba(255,255,255,.35);
+      background: rgba(255,255,255,.12); color: #fff; cursor: pointer; font-size: 13px; }
+    .confirm { margin-top: 24px; display: flex; gap: 10px; justify-content: flex-end; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>Quel est ce poste&nbsp;?</h1>
+    <p class="lead">
+      Le magasin utilise deux ordinateurs. À choisir une seule fois, sur chaque machine.
+    </p>
+
+    <div class="roles">
+      <button class="role" id="role-till" aria-pressed="false">
+        <div class="icon">🧾</div>
+        <div class="name">Caisse</div>
+        <div class="desc">
+          Encaisse les clients et imprime les tickets. C'est cet ordinateur qui
+          conserve les produits, les prix et les ventes.
+        </div>
+      </button>
+      <button class="role" id="role-scale" aria-pressed="false">
+        <div class="icon">⚖️</div>
+        <div class="name">Poste balance</div>
+        <div class="desc">
+          Pèse le vrac et imprime les étiquettes. Il se connecte à la caisse
+          pour lire les mêmes produits et les mêmes prix.
+        </div>
+      </button>
+    </div>
+
+    <div class="panel" id="panel-scale">
+      <label for="till-url">Adresse de la caisse sur le réseau</label>
+      <div class="row">
+        <input id="till-url" placeholder="192.168.1.12" autocomplete="off" spellcheck="false">
+        <button class="action ghost" id="search">Rechercher</button>
+      </div>
+      <div class="found" id="found"></div>
+      <p class="hint">
+        L'adresse s'affiche sur la caisse, dans
+        <b>Réglages → Fonctionnement de la caisse</b>. Les deux ordinateurs
+        doivent être sur le même réseau.
+      </p>
+    </div>
+
+    <div class="status" id="status"></div>
+
+    <div class="confirm">
+      <button class="action" id="save" disabled>Continuer</button>
+    </div>
+  </div>
+
+  <script>
+    const api = window.stationSetup;
+    let role = null;
+
+    const el = (id) => document.getElementById(id);
+    const status = el('status');
+
+    function setStatus(text, kind) {
+      status.textContent = text || '';
+      status.className = 'status' + (kind ? ' ' + kind : '');
+    }
+
+    function refresh() {
+      el('role-till').setAttribute('aria-pressed', String(role === 'till'));
+      el('role-scale').setAttribute('aria-pressed', String(role === 'scale'));
+      el('panel-scale').classList.toggle('visible', role === 'scale');
+      // A scale station is useless without somewhere to connect to, so the
+      // button stays disabled until an address has been entered.
+      el('save').disabled = !role || (role === 'scale' && !el('till-url').value.trim());
+    }
+
+    el('role-till').addEventListener('click', () => { role = 'till'; setStatus(''); refresh(); });
+    el('role-scale').addEventListener('click', () => { role = 'scale'; setStatus(''); refresh(); });
+    el('till-url').addEventListener('input', () => { setStatus(''); refresh(); });
+
+    el('search').addEventListener('click', async () => {
+      setStatus('Recherche de la caisse sur le réseau…');
+      el('found').innerHTML = '';
+      const found = await api.discoverTills();
+      if (!found.length) {
+        setStatus("Aucune caisse trouvée. Vérifiez que la caisse est allumée et sur le même réseau, ou saisissez son adresse à la main.", 'error');
+        return;
+      }
+      setStatus(found.length === 1 ? '1 caisse trouvée' : found.length + ' caisses trouvées', 'ok');
+      for (const url of found) {
+        const b = document.createElement('button');
+        b.textContent = url;
+        b.addEventListener('click', () => { el('till-url').value = url; refresh(); });
+        el('found').appendChild(b);
+      }
+    });
+
+    el('save').addEventListener('click', async () => {
+      el('save').disabled = true;
+      setStatus(role === 'scale' ? 'Connexion à la caisse…' : 'Enregistrement…');
+      const result = await api.save({ role, tillUrl: el('till-url').value });
+      if (!result.ok) {
+        setStatus(result.error || "La configuration n'a pas pu être enregistrée.", 'error');
+        refresh();
+        return;
+      }
+      setStatus('Configuration enregistrée. Démarrage…', 'ok');
+    });
+
+    refresh();
+  </script>
+</body>
+</html>

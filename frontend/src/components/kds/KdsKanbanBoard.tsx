@@ -2,7 +2,7 @@
 
 import { PointerActivationConstraints, PointerSensor } from '@dnd-kit/dom';
 import { DragDropProvider, useDraggable, type DragEndEvent } from '@dnd-kit/react';
-import { Clock } from 'lucide-react';
+import { Clock, StickyNote } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import toast from 'react-hot-toast';
 import { KdsColumn } from '@/components/kds/KdsColumn';
@@ -235,7 +235,7 @@ function KanbanOrderCard({
 
         {order.special_instructions && (
           <p className="mb-2 px-2 py-1 bg-amber-50 border border-amber-200 rounded text-sm text-amber-700 font-medium break-words">
-            📝 {order.special_instructions}
+            <StickyNote size={12} className="inline shrink-0 me-1 align-[-2px]" />{order.special_instructions}
           </p>
         )}
 

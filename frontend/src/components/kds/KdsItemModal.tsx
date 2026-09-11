@@ -1,6 +1,6 @@
 'use client';
 
-import { ChevronLeft, ChevronRight, X } from 'lucide-react';
+import { Check, ChevronLeft, ChevronRight, X } from 'lucide-react';
 import { useI18n } from '@/hooks/useI18n';
 import {
   STATUS_CONFIG,
@@ -145,7 +145,8 @@ export function KdsItemModal({ item, orderNumber, updating, onClose, onUpdateSta
                 </button>
               )}
               {!next && (
-                <div className="text-center py-4 text-gray-400 text-base font-medium">
+                <div className="flex items-center justify-center gap-2 py-4 text-gray-400 text-base font-medium">
+                  <Check size={18} className="shrink-0" />
                   {t('kds.deliveredDone')}
                 </div>
               )}

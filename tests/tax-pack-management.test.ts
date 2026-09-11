@@ -91,6 +91,21 @@ async function main() {
     // off. Enable it here so the management assertions exercise the active
     // country-plugin path rather than the generic no-tax default.
     db.prepare("UPDATE settings SET value = 'true' WHERE key = 'taxes_enabled'").run();
+    // This suite exercises tax packs, not the install's business type. Its
+    // fixture pack restricts every rule to businessTypes ["restaurant","salon"]
+    // (tests/fixtures/synthetic-dual-rate-pack.json), so it has to state the
+    // business type it needs rather than inherit whatever a fresh install
+    // happens to seed — which is now 'retail'.
+    // This suite installs India-specific packs and asserts they become active
+    // for the store, so it must also state its country instead of inheriting
+    // the install default (now 'MA').
+    db.prepare("UPDATE settings SET value = 'restaurant' WHERE key = 'business_type'").run();
+    db.prepare("UPDATE settings SET value = 'IN' WHERE key = 'country'").run();
+    db.prepare("UPDATE settings SET value = 'INR' WHERE key = 'currency'").run();
+    // This suite exercises how a discount recomputes tax, so it enables the
+    // feature rather than inheriting the install default — which is now off
+    // for a grocery (migration v60).
+    db.prepare("INSERT INTO settings (key, value) VALUES ('discount_enabled', 'true') ON CONFLICT(key) DO UPDATE SET value = 'true'").run();
     const listRes = await api(baseUrl, '/api/tax-packs', { headers: manager.authHeader });
     const installedPack = listRes.data.packs.find((pack: any) => pack.id === 'test-legacy-in-pack');
     assert(!!installedPack, 'legacy pack is listed');

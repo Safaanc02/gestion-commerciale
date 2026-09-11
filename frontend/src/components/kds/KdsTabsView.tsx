@@ -1,6 +1,6 @@
 'use client';
 
-import { ChevronRight, Clock } from 'lucide-react';
+import { ChevronRight, Clock, StickyNote } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 import { KdsItemModal } from '@/components/kds/KdsItemModal';
 import { Badge } from '@/components/ui/badge';
@@ -123,7 +123,7 @@ export function KdsTabsView({ orders, updating, updateItemStatus }: KdsTabsViewP
               {order.special_instructions && (
                 <div className="mb-2 px-2 py-1.5 bg-amber-50 border border-amber-200 rounded-lg">
                   <p className="text-sm text-amber-700 font-medium break-words">
-                    📝 {order.special_instructions}
+                    <StickyNote size={12} className="inline shrink-0 me-1 align-[-2px]" />{order.special_instructions}
                   </p>
                 </div>
               )}

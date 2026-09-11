@@ -134,6 +134,13 @@ const EXPECTED_DISCOUNT_SETTINGS: Record<string, string> = {
 function seedTestData() {
   const db = getDatabase();
 
+  // This whole suite is about discounts, which a fresh grocery install ships
+  // disabled (migration v60). Enable them here rather than inherit a default
+  // this suite has no opinion about.
+  db.prepare(
+    "INSERT INTO settings (key, value) VALUES ('discount_enabled', 'true') ON CONFLICT(key) DO UPDATE SET value = 'true'"
+  ).run();
+
   // Create a category and product for order items
   db.prepare(
     `INSERT INTO categories (id, name, sort_order) VALUES (?, ?, ?)`

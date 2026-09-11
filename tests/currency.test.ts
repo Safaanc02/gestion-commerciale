@@ -49,3 +49,40 @@ test('formatCurrencyForTenant: missing country defaults to IN', () => {
   assert.match(out, /7\.00/);
   assert.match(out, /₹/);
 });
+
+test('formatCurrency: Moroccan dirham shows DH, not the ISO code', () => {
+  // CLDR has no short form for MAD, so every locale renders "MAD" — but no
+  // price tag in Morocco says that. The override swaps the currency part only,
+  // leaving the locale's grouping and decimal separator untouched.
+  // \u00a0 is the non-breaking space fr-MA puts before the symbol — asserted
+  // literally so a change to it fails here rather than on a printed receipt.
+  assert.equal(formatCurrency(1234.5, 'MAD', 'fr-MA'), '1.234,50\u00a0DH');
+  assert.equal(formatCurrency(12.5, 'MAD', 'fr-MA'), '12,50\u00a0DH');
+});
+
+test('formatCurrency: the override does not leak into other currencies', () => {
+  assert.equal(formatCurrency(1234.5, 'USD', 'en-US'), '$1,234.50');
+  assert.match(formatCurrency(1234.5, 'EUR', 'fr-FR'), /€/);
+});
+
+test('formatCurrencyForTenant: a Moroccan store gets DH', () => {
+  assert.equal(formatCurrencyForTenant(9.18, 'MA', 'MAD'), '9,18\u00a0DH');
+});
+
+test('getCurrencySymbol: MAD is DH, and it fits the receipt column', () => {
+  const { getCurrencySymbol } = require('../main/countries');
+  assert.equal(getCurrencySymbol('MAD', 'fr-MA'), 'DH');
+  // resolveCurrencyPrefix() in printers/thermal.ts pads to a two-character
+  // slot; a three-character symbol pushes the amount column over the paper.
+  assert.equal(getCurrencySymbol('MAD', 'fr-MA').length, 2);
+});
+
+test('the printed receipt keeps the amount readable', () => {
+  // The non-breaking space is not ASCII, and the receipt encoder drops
+  // characters an ESC/POS printer cannot draw. It must fold to a plain space
+  // rather than be lost, or "9,18DH" runs together on every total.
+  const { foldToPrinterAscii } = require('../main/printers/thermal');
+  const folded = foldToPrinterAscii(formatCurrency(9.18, 'MAD', 'fr-MA'));
+  assert.equal(folded.text, '9,18 DH');
+  assert.equal(folded.lost, false, 'and it raises no "unsupported character" warning');
+});

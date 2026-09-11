@@ -46,11 +46,15 @@ async function main() {
   const db = initTestDb();
 
   try {
-    // ── Test: loyalty_enabled exists with default ──────────────────────
-    console.log('\n1. loyalty_enabled setting exists');
+    // ── Test: loyalty_enabled exists, and ships off ────────────────────
+    // A grocery does not run a points scheme, so migration v59 turns it off
+    // for a fresh install. The toggle itself still works — that is what the
+    // rest of this suite covers — and a shop that wants points switches it
+    // back on in Settings.
+    console.log('\n1. loyalty_enabled setting exists and defaults to off');
     const row = db.prepare("SELECT value FROM settings WHERE key = 'loyalty_enabled'").get() as any;
     assert(row !== undefined, 'setting "loyalty_enabled" exists');
-    if (row) assertEqual(row.value, 'true', 'setting "loyalty_enabled" = "true"');
+    if (row) assertEqual(row.value, 'false', 'setting "loyalty_enabled" ships disabled');
 
     // ── Test: retired tuning settings are gone ─────────────────────────
     console.log('\n2. Retired loyalty tuning settings are removed');

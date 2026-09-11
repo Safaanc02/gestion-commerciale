@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react';
-import { fetchServerInfo } from '@/lib/i18n';
+import { fetchServerInfo, type Language } from '@/lib/i18n';
 import type { KdsViewMode } from '@/hooks/useKdsView';
 
 export interface ServerKdsInfo {
-  language: 'en' | 'es' | 'pt' | null;
+  language: Language | null;
   country: string | null;
   kdsDefaultView: KdsViewMode | null;
 }

@@ -217,7 +217,7 @@ function main() {
     // merits, not that the global switch happens to also be off.
     { country: 'IN', business_type: 'restaurant', state_code: 'KA', taxes_enabled: true },
     db.prepare('SELECT * FROM products WHERE id = ?').get(legacyProduct.id),
-    100,
+    { taxableAmount: 100, quantity: 1, unitPrice: 100 },
     null,
   );
   assert.equal(legacyTax.tax_amount, 0, 'an upgraded product with no resolved tax category charges no tax');

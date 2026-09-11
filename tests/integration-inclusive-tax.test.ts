@@ -21,9 +21,19 @@ const {
 const { orderRoutes } = require('../main/routes/orders');
 const { billRoutes } = require('../main/routes/bills');
 
+function db_discountEnable() {
+  const { getDatabase } = require('../main/db');
+  getDatabase().prepare(
+    "INSERT INTO settings (key, value) VALUES ('discount_enabled', 'true') ON CONFLICT(key) DO UPDATE SET value = 'true'"
+  ).run();
+}
+
 async function main() {
     console.log('Integration Test: Inclusive Tax Correctness');
     const db = initTestDb();
+  // A fresh grocery install ships discounts off (migration v60); this suite
+  // exercises them, so it enables the feature rather than inheriting a default.
+  db_discountEnable();
 
     db.prepare("INSERT OR REPLACE INTO settings (key, value, updated_at) VALUES ('country', 'IN', ?)").run(now());
     db.prepare("INSERT OR REPLACE INTO settings (key, value, updated_at) VALUES ('business_type', 'restaurant', ?)").run(now());

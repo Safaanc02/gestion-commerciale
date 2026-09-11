@@ -76,6 +76,13 @@ function main() {
   assert(!preColumns.includes('country_code'), 'setup: country_code removed to simulate an old install');
   assert(!preColumns.includes('tag_counts'), 'setup: tag_counts removed to simulate an old install');
 
+  // Migration v23 normalises bare local numbers using the install's country,
+  // so this fixture has to say it is an Indian install. It used to inherit
+  // that from the seeded default; the default is now 'MA', and 9876543210
+  // would normalise to a Moroccan number instead. The assertion below is about
+  // v23 running to completion, not about which country it ran for.
+  db.prepare(`UPDATE settings SET value = 'IN' WHERE key = 'country'`).run();
+
   db.prepare(`INSERT INTO customers (id, name, phone, is_active, created_at, updated_at) VALUES (?,?,?,?,?,?)`)
     .run('cust-old', 'Old Customer', '9876543210', 1, now(), now());
 

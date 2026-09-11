@@ -20,7 +20,9 @@
     ],
     "paths": {
       "@/*": ["./src/*"],
-      "@countries": ["../main/countries.ts"]
+      "@countries": ["../main/countries.ts"],
+      "@units": ["../main/lib/units.ts"],
+      "@scale-barcode": ["../main/lib/scale-barcode.ts"]
     }
   },
   "include": [

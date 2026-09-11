@@ -396,7 +396,7 @@ test('products without a resolved tax category charge no tax, regardless of lega
   const uncategorizedIndia = calculateItemTax(
     { country: 'IN', business_type: 'restaurant', state_code: 'KA', taxes_enabled: true },
     { tax_type: 'exclusive', tax_rate: 18 },
-    10.1,
+    { taxableAmount: 10.1, quantity: 1, unitPrice: 10.1 },
     null,
   );
   assert.deepEqual(uncategorizedIndia, {
@@ -409,7 +409,7 @@ test('products without a resolved tax category charge no tax, regardless of lega
   const uncategorizedFallback = calculateItemTax(
     { country: 'US', business_type: 'retail', state_code: '', taxes_enabled: true },
     { tax_type: 'inclusive', tax_rate: 10 },
-    110,
+    { taxableAmount: 110, quantity: 1, unitPrice: 110 },
     null,
   );
   assert.deepEqual(uncategorizedFallback, {

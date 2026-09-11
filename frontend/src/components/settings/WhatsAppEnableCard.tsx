@@ -47,8 +47,8 @@ export function WhatsAppEnableCard() {
         <div className="flex items-center gap-2">
           <MessageCircle size={20} className="text-brand" />
           <div>
-            <h2 className="font-semibold text-gray-900">{t('whatsapp.enable.title')}</h2>
-            <p className="text-xs text-gray-500 mt-0.5">{t('whatsapp.enable.description')}</p>
+            <h2 className="font-semibold text-foreground">{t('whatsapp.enable.title')}</h2>
+            <p className="text-xs text-muted-foreground mt-0.5">{t('whatsapp.enable.description')}</p>
           </div>
         </div>
         <div className="rounded-md border bg-muted/40 p-4 text-sm space-y-3">

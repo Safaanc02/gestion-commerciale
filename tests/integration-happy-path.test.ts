@@ -28,7 +28,7 @@ const {
   seedOwnerUser, seedCategory, seedProduct,
   installAndActivateTestTaxPack,
   api, assert, assertEqual,
-  getResults, closeDatabase,
+  getResults, closeDatabase, now,
 } = require('./helpers/test-setup');
 
 const { orderRoutes } = require('../main/routes/orders');
@@ -39,11 +39,27 @@ const dualRatePackData = require('./fixtures/synthetic-dual-rate-pack.json');
 // through to the generic no-tax default.
 const testTaxPack = { ...dualRatePackData, id: 'test-in-pack', country: 'IN', currency: 'INR', publisher: 'FreeOpenSourcePOS' };
 
+function db_discountEnable() {
+  const { getDatabase } = require('../main/db');
+  getDatabase().prepare(
+    "INSERT INTO settings (key, value) VALUES ('discount_enabled', 'true') ON CONFLICT(key) DO UPDATE SET value = 'true'"
+  ).run();
+}
+
 async function main() {
   console.log('Integration Test: Happy Path');
   console.log('='.repeat(50));
 
   const db = initTestDb();
+  // A fresh grocery install ships discounts off (migration v60); this suite
+  // exercises them, so it enables the feature rather than inheriting a default.
+  db_discountEnable();
+  // The fixture pack is India-specific and restricts its rules to
+  // businessTypes ["restaurant", "salon"], so this suite states both instead
+  // of inheriting the install defaults — which are now Moroccan retail.
+  db.prepare("INSERT OR REPLACE INTO settings (key, value, updated_at) VALUES ('country', 'IN', ?)").run(now());
+  db.prepare("INSERT OR REPLACE INTO settings (key, value, updated_at) VALUES ('currency', 'INR', ?)").run(now());
+  db.prepare("INSERT OR REPLACE INTO settings (key, value, updated_at) VALUES ('business_type', 'restaurant', ?)").run(now());
   installAndActivateTestTaxPack(db, testTaxPack);
 
   // Seed: owner user, category, 2 products

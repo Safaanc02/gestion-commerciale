@@ -190,7 +190,7 @@ async function runArgentinaTaxAndCustomers(baseUrl, db) {
   const result = calculateItemTax(
     { country: 'AR', business_type: 'restaurant', state_code: '', taxes_enabled: true },
     { tax_type: 'inclusive', tax_rate: 21 },
-    100,
+    { taxableAmount: 100, quantity: 1, unitPrice: 100 },
     null,
   );
   assertEqual(result.tax_amount, 0, 'uncategorized AR product is tax-free');

@@ -1,3 +1,4 @@
+import type { Language } from '@/lib/i18n';
 export interface User {
   id: number;
   name: string;
@@ -20,7 +21,7 @@ export interface Tenant {
   plan: string;
   status: string;
   role?: string;
-  language?: 'en' | 'es' | 'pt';
+  language?: Language;
 }
 
 export interface Category {
@@ -65,6 +66,15 @@ export interface Product {
   track_inventory: boolean;
   stock_quantity: number;
   low_stock_threshold: number | null;
+  /** 'kg' means sold by weight: decimal quantities, priced per kilo. */
+  unit_of_measure?: 'unit' | 'kg';
+  /** Decimals a quantity may carry — 3 (the gram) for kg, 0 for countable. */
+  quantity_precision?: number;
+  /** Item code the scale prints inside a label barcode. Weighed products only. */
+  plu_code?: string | null;
+  tare_default?: number;
+  /** Per-line ceiling, guarding against a misread label. */
+  max_quantity?: number | null;
   is_active: boolean;
   available_online: boolean;
   has_image: boolean;
@@ -248,4 +258,14 @@ export interface CartItem {
   quantity: number;
   addons: Addon[];
   special_instructions: string;
+  /** Snapshot of how this line was measured; 'unit' when absent. */
+  unit_of_measure?: 'unit' | 'kg';
+  quantity_source?: 'unit' | 'scale_label' | 'manual_weight' | 'price_derived';
+  amount_source?: 'computed' | 'label_price';
+  /** Raw digits of the scanned label — the server re-decodes them on checkout. */
+  scan_raw?: string | null;
+  /** Line amount when the label carried the price and it must not be recomputed. */
+  label_amount?: number | null;
+  /** Price keyed at the till; null means the catalogue price applies. */
+  unit_price?: number | null;
 }

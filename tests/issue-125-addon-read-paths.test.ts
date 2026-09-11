@@ -45,6 +45,10 @@ async function main() {
   console.log('='.repeat(60));
 
   const db = initTestDb();
+  // Part G below applies a discount to check the add-on price is in its base,
+  // so the feature is enabled explicitly — a fresh grocery install ships it
+  // off (migration v60).
+  db.prepare("INSERT INTO settings (key, value) VALUES ('discount_enabled', 'true') ON CONFLICT(key) DO UPDATE SET value = 'true'").run();
   const { authHeader } = seedOwnerUser(db);
   seedCategory(db, 'cat-125', 'Food');
   seedProduct(db, 'prod-125', 'cat-125', 'Tea', 50);

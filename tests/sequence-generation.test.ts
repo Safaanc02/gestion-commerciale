@@ -43,12 +43,18 @@ async function main() {
 
     // ── Test 2: First order number is ORD-<date>-0001 ─────────────────
     console.log('\n2. First order number is ORD-<date>-0001');
-    // generateOrderNumber() dates its bucket in the store timezone
-    // (default Asia/Kolkata), while generateBillNumber() below still
-    // uses raw UTC -- these two are NOT always the same calendar day
-    // (Kolkata is UTC+5:30), so each needs its own expected date.
+    // generateOrderNumber() dates its bucket in the STORE's timezone, while
+    // generateBillNumber() below still uses raw UTC -- these two are not
+    // always the same calendar day, so each needs its own expected date.
+    //
+    // The store timezone is read from settings rather than named here: this
+    // test asserts that numbering follows the configured timezone, whatever it
+    // is, and hard-coding one made it fail the moment the install default
+    // moved from Asia/Kolkata to Africa/Casablanca.
     const today = new Date().toISOString().slice(0, 10).replace(/-/g, '');
-    const orderToday = dateStampInTimezone('Asia/Kolkata');
+    const storeTimezone = (db.prepare("SELECT value FROM settings WHERE key = 'timezone'")
+      .get() as { value?: string } | undefined)?.value || 'UTC';
+    const orderToday = dateStampInTimezone(storeTimezone);
     const first = generateOrderNumber();
     assertEqual(first, `ORD-${orderToday}-0001`, 'First order number matches');
 

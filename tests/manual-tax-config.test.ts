@@ -157,7 +157,8 @@ async function main() {
       business_type: db.prepare("SELECT value FROM settings WHERE key = 'business_type'").get()?.value || 'restaurant',
       state_code: '',
     };
-    const result = calculateItemTax(tenant, { id: 'manual-tax-product', tax_category_id: null, tax_category: null }, 100, null);
+    const result = calculateItemTax(tenant, { id: 'manual-tax-product', tax_category_id: null, tax_category: null },
+      { taxableAmount: 100, quantity: 1, unitPrice: 100 }, null);
     assertEqual(result.tax_type, 'inclusive', 'the previously-dangling product override resolves and calculates tax without throwing');
     assert(result.tax_amount > 0, 'a nonzero tax amount is computed against the remapped category');
     console.log('   ✓ calculateItemTax succeeds against the remapped override instead of throwing "resolved unknown tax category"');

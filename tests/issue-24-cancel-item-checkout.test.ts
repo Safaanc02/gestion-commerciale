@@ -47,6 +47,12 @@ async function main() {
   console.log('='.repeat(60));
 
   const db = initTestDb();
+  // The fixture pack is India-specific and restricts its rules to
+  // businessTypes ["restaurant", "salon"], so this suite states both instead
+  // of inheriting the install defaults — which are now Moroccan retail.
+  db.prepare("INSERT OR REPLACE INTO settings (key, value, updated_at) VALUES ('country', 'IN', ?)").run(now());
+  db.prepare("INSERT OR REPLACE INTO settings (key, value, updated_at) VALUES ('currency', 'INR', ?)").run(now());
+  db.prepare("INSERT OR REPLACE INTO settings (key, value, updated_at) VALUES ('business_type', 'restaurant', ?)").run(now());
   installAndActivateTestTaxPack(db, testTaxPack);
 
   const { authHeader } = seedOwnerUser(db);

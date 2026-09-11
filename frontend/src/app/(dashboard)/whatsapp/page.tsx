@@ -500,7 +500,7 @@ export default function WhatsAppPage() {
                       <div className="space-y-2">
                         <p className="text-sm text-muted-foreground">{t('whatsapp.connect.qrInstruction')}</p>
                         {qrDataUrl ? (
-                          <div className="rounded-md border p-3 inline-block bg-white">
+                          <div className="rounded-md border p-3 inline-block bg-card">
                             <img src={qrDataUrl} alt={t('whatsapp.tabs.connection')} className="w-64 h-64" />
                           </div>
                         ) : (
@@ -602,7 +602,7 @@ export default function WhatsAppPage() {
                   <CardContent className="space-y-3">
                     <div className="flex flex-wrap gap-2 items-end">
                       <div className="flex-1 min-w-[180px]">
-                        <label className="text-xs text-gray-500">{t('whatsapp.blocklist.phoneLabel')}</label>
+                        <label className="text-xs text-muted-foreground">{t('whatsapp.blocklist.phoneLabel')}</label>
                         <Input
                           value={blockPhone}
                           onChange={(e) => setBlockPhone(e.target.value)}
@@ -611,13 +611,13 @@ export default function WhatsAppPage() {
                         />
                       </div>
                       <div className="flex-1 min-w-[180px]">
-                        <label className="text-xs text-gray-500">{t('whatsapp.blocklist.reasonLabel')}</label>
+                        <label className="text-xs text-muted-foreground">{t('whatsapp.blocklist.reasonLabel')}</label>
                         <Input value={blockReason} onChange={(e) => setBlockReason(e.target.value)} placeholder={t('whatsapp.blocklist.reasonPlaceholder')} />
                       </div>
                       <Button onClick={addBlock}>{t('whatsapp.blocklist.addCta')}</Button>
                     </div>
                     {blocklist.length === 0 ? (
-                      <p className="text-sm text-gray-500">{t('whatsapp.blocklist.empty')}</p>
+                      <p className="text-sm text-muted-foreground">{t('whatsapp.blocklist.empty')}</p>
                     ) : (
                       <Table>
                         <TableHeader>
@@ -632,8 +632,8 @@ export default function WhatsAppPage() {
                           {blocklist.map((b) => (
                             <TableRow key={b.phone_e164}>
                               <TableCell className="font-mono text-sm">{b.phone_e164}</TableCell>
-                              <TableCell className="text-sm text-gray-600">{b.reason ?? '—'}</TableCell>
-                              <TableCell className="text-sm text-gray-600">{parseDbTimestamp(b.blocked_at).toLocaleString()}</TableCell>
+                              <TableCell className="text-sm text-muted-foreground">{b.reason ?? '—'}</TableCell>
+                              <TableCell className="text-sm text-muted-foreground">{parseDbTimestamp(b.blocked_at).toLocaleString()}</TableCell>
                               <TableCell><Button size="sm" variant="ghost" onClick={() => removeBlock(b.phone_e164)}>{t('whatsapp.blocklist.removeCta')}</Button></TableCell>
                             </TableRow>
                           ))}
