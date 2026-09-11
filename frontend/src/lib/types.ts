@@ -207,6 +207,8 @@ export interface Bill {
   paid_amount: number;
   balance: number;
   payment_status: 'unpaid' | 'partial' | 'paid';
+  /** DB wall-clock form, "YYYY-MM-DD HH:MM:SS" in UTC. Returned by every bill endpoint. */
+  created_at?: string;
   payment_details: { method: string; amount: number; timestamp: string }[] | null;
   tax_breakdown?: { title: string; rate: number; amount: number }[] | null;
   tax_snapshot?: TaxSnapshot[] | TaxSnapshot | null;

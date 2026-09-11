@@ -85,6 +85,31 @@ router.get('/', requireRole('owner', 'manager', 'cashier'), (req: Request, res: 
       params.push(s, e);
     }
 
+    /**
+     * An explicit range, for the cash journal.
+     *
+     * Both ends are inclusive days, expressed as the same half-open UTC bounds
+     * the `today` filter uses so the index is hit rather than date() being run
+     * over every row — and so a sale rung up at 23:58 lands in the day the
+     * shopkeeper would put it in.
+     *
+     * A malformed date is refused rather than ignored: silently returning the
+     * whole history would print a hundred pages and look like it worked.
+     */
+    const isDay = (v: unknown): v is string => typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v);
+    if (req.query.from !== undefined || req.query.to !== undefined) {
+      const from = req.query.from ?? req.query.to;
+      const to = req.query.to ?? req.query.from;
+      if (!isDay(from) || !isDay(to)) {
+        return res.status(400).json({ error: 'from and to must be dates in YYYY-MM-DD form' });
+      }
+      if (from > to) {
+        return res.status(400).json({ error: 'from must not be after to' });
+      }
+      query += ' AND created_at >= ? AND created_at < ?';
+      params.push(utcDayBounds(from)[0], utcDayBounds(to)[1]);
+    }
+
     query += ' ORDER BY created_at DESC';
 
     // #208: default page size of 50 and a hard cap even when clients omit
