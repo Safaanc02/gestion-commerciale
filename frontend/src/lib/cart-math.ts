@@ -1,5 +1,5 @@
 import type { CartItem } from '@/lib/types';
-import { isWeighed, roundMoney } from '@units';
+import { formatQuantity, isWeighed, roundMoney } from '@units';
 
 /**
  * What a cart line costs.
@@ -30,4 +30,24 @@ export function cartLineTotal(item: CartItem): number {
 /** The unit price actually charged: a keyed price if there is one. */
 export function cartUnitPrice(item: CartItem): number {
   return item.unit_price ?? (Number(item.product?.price) || 0);
+}
+
+/**
+ * How much of something a line is for.
+ *
+ * A countable line reads "2x"; a weighed one reads "0,734 kg". Getting this
+ * wrong is not cosmetic — the orders screen showed a 4-gram line of vermicelli
+ * as "0.004x", which reads as a fraction of a packet rather than as a weight,
+ * and gives no clue that the cashier keyed grams where they meant kilos.
+ *
+ * Shared because the till, the basket and the order history all show the same
+ * line and must describe it the same way.
+ */
+export function quantityLabel(
+  quantity: number | string,
+  unitOfMeasure: string | null | undefined,
+  locale: string,
+): string {
+  const qty = Number(quantity) || 0;
+  return isWeighed(unitOfMeasure) ? formatQuantity(qty, 'kg', locale) : `${qty}x`;
 }

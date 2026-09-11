@@ -186,6 +186,8 @@ export interface OrderItem {
   addons: { id?: number | string | null; name: string; price?: number; quantity?: number }[] | null;
   special_instructions: string | null;
   status: 'pending' | 'preparing' | 'ready' | 'served' | 'cancelled' | 'voided' | 'void_adjustment';
+  /** 'kg' for loose goods, 'unit' otherwise. Written by the server on every line. */
+  unit_of_measure?: string | null;
 }
 
 export interface Bill {

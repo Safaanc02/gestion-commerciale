@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 import api from '@/lib/api';
 import { useAuthStore } from '@/store/auth';
 import CashJournalDialog from '@/components/orders/CashJournalDialog';
+import { quantityLabel } from '@/lib/cart-math';
 import { Button } from '@/components/ui/button';
 import { CreditCard, Trash2, RotateCcw, Clock, MessageCircle, Printer, XCircle, Lock, Percent, Banknote, Search, Plus, ChevronDown, ChevronRight, UserPlus, User, ShoppingBag, Send, Loader2, Ban, StickyNote, X, FileText } from 'lucide-react';
 import toast from 'react-hot-toast';
@@ -158,6 +159,8 @@ export default function OrdersPage() {
   const linkSearchRef = useRef<ReturnType<typeof setTimeout>>(undefined);
 
   const currency = getCurrencySymbol(currentTenant?.currency || 'INR', getCountryByCode(currentTenant?.country ?? 'IN')?.locale);
+  // Weights read the way the scale label prints them, not with a decimal point.
+  const locale = getCountryByCode(currentTenant?.country ?? 'MA')?.locale ?? 'fr-MA';
   const fmt = useFormatCurrency();
   const isOwnerOrManager = currentTenant?.role === 'owner' || currentTenant?.role === 'manager';
 
@@ -850,7 +853,7 @@ export default function OrdersPage() {
                  <div className="p-4 flex-1">
                    {heldOrder.items.map((item, idx) => (
                      <div key={idx} className="flex justify-between text-sm py-1 text-foreground">
-                       <span>{item.quantity}x {item.product.name}</span>
+                       <span>{quantityLabel(item.quantity, item.unit_of_measure ?? item.product?.unit_of_measure, locale)} {item.product.name}</span>
                      </div>
                    ))}
                    {heldOrder.orderNotes && (
@@ -1055,7 +1058,7 @@ export default function OrdersPage() {
                             <div className="flex items-center gap-2 flex-1 min-w-0">
                               <span className={`w-2 h-2 rounded-full shrink-0 ${config.dot}`} title={t(config.labelKey)} />
                               <span className={`text-sm font-medium ${config.color}`}>
-                                {item.quantity}x
+                                {quantityLabel(item.quantity, item.unit_of_measure, locale)}
                               </span>
                               <span className="text-sm text-foreground truncate">{item.product_name}</span>
                               {item.special_instructions && (
@@ -1136,7 +1139,7 @@ export default function OrdersPage() {
                           <div className="flex items-center gap-2">
                             <X size={12} className="shrink-0" />
                             <span className="text-xs text-muted-foreground/70 line-through">
-                              {item.quantity}x {item.product_name}
+                              {quantityLabel(item.quantity, item.unit_of_measure, locale)} {item.product_name}
                             </span>
                           </div>
                           {!paid && order.status !== 'completed' && order.status !== 'cancelled' && (
