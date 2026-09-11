@@ -26,6 +26,11 @@ const nextConfig: NextConfig = {
     root: path.resolve(process.cwd(), '..'),
     resolveAlias: {
       '@countries': '../main/countries.ts',
+      // Weighed-goods vocabulary and scale-label decoding are shared with the
+      // main process so the till, the stored order and the receipt agree on
+      // one rounding and one label format. Both modules are dependency-free.
+      '@units': '../main/lib/units.ts',
+      '@scale-barcode': '../main/lib/scale-barcode.ts',
     },
   },
 };

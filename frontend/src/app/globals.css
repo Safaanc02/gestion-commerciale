@@ -7,38 +7,58 @@
 :root {
   --font-sans: "Geist", system-ui, sans-serif;
   --font-mono: "Geist Mono", monospace;
-  --radius: 0.625rem;
+  /* Tighter than the shadcn default. The console look leans on straight edges
+     and rules; heavily rounded corners read as a consumer app and softened
+     every table and panel edge into the same blur. */
+  --radius: 0.5rem;
+  /* A white workspace, not cream. Cards are the same white as the page and are
+     separated by hairlines rather than boxes, so the page reads as one surface
+     with the dark sidebar as its only heavy element. */
   --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
+  /* Raised from 0.145 grey: at arm's length under shop lighting the old
+     muted greys sat below comfortable reading contrast. */
+  --foreground: oklch(0.21 0.012 160);
   --card: oklch(1 0 0);
   --card-foreground: oklch(0.145 0 0);
   --popover: oklch(1 0 0);
   --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
-  --primary-foreground: oklch(0.985 0 0);
+  /* #1B6B4A — the single accent, expressed in oklch like the rest of the
+     shadcn scale so components that derive shades from it stay consistent. */
+  --primary: oklch(0.472 0.093 160.5);
+  --primary-foreground: oklch(0.99 0.005 150);
   --secondary: oklch(0.97 0 0);
   --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
+  --muted: oklch(0.965 0.006 120);
+  --muted-foreground: oklch(0.47 0.014 160);
+  --accent: oklch(0.955 0.018 155);
+  --accent-foreground: oklch(0.35 0.07 160);
   --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
+  /* Hairlines. With cards no longer carrying a filled background, the border
+     is what separates content — so it must read as a rule, not a box edge. */
+  --border: oklch(0.925 0.005 150);
+  --input: oklch(0.9 0.006 150);
+  --ring: oklch(0.472 0.093 160.5);
   --chart-1: oklch(0.646 0.222 41.116);
   --chart-2: oklch(0.6 0.118 184.704);
   --chart-3: oklch(0.398 0.07 227.392);
   --chart-4: oklch(0.828 0.189 84.429);
   --chart-5: oklch(0.769 0.188 70.08);
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: #3248FF;
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: #e8ebff;
-  --sidebar-accent-foreground: #3248FF;
-  --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: #3248FF;
+  /* The navigation is the one solid mass on screen: deep green, light type,
+     the same in either theme. Everything else is white and quiet, so a glance
+     at the edge of the screen tells you where you are without reading.
+     Every pair below is measured against WCAG AA on the sidebar ground:
+       #DCE9E0 on #123D2B  9.7:1   idle navigation
+       #FFFFFF on #1D5A3E  8.1:1   hovered and current page
+       #9DBBAA on #123D2B  5.9:1   section labels
+       #123D2B on #46C88A  5.7:1   the shop initial on its chip */
+  --sidebar: #123D2B;
+  --sidebar-foreground: #DCE9E0;
+  --sidebar-primary: #46C88A;
+  --sidebar-primary-foreground: #123D2B;
+  --sidebar-accent: #1D5A3E;
+  --sidebar-accent-foreground: #FFFFFF;
+  --sidebar-border: oklch(1 0 0 / 12%);
+  --sidebar-ring: #46C88A;
 }
 
 body {
@@ -104,10 +124,14 @@ body {
   --color-sidebar-ring: var(--sidebar-ring);
 
   /* Brand colors */
-  --color-brand: #3248FF;
-  --color-brand-light: #e8ebff;
-  --color-brand-hover: #2538d4;
-  --color-brand-ring: #3248FF80;
+  /* One accent for the whole application.
+     `primary` used to be near-black while `brand` was an electric blue, so
+     buttons and totals disagreed about which colour meant "this matters".
+     They now resolve to the same green. */
+  --color-brand: #1B6B4A;
+  --color-brand-light: #E7F3ED;
+  --color-brand-hover: #14523A;
+  --color-brand-ring: #1B6B4A66;
   --color-success: #00cc61;
   --color-success-light: #dcfce7;
   --color-success-hover: #00b355;
@@ -137,14 +161,17 @@ body {
   --chart-3: oklch(0.769 0.188 70.08);
   --chart-4: oklch(0.627 0.265 303.9);
   --chart-5: oklch(0.645 0.246 16.439);
-  --sidebar: oklch(0.205 0 0);
-  --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: #3248FF;
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.269 0 0);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: #3248FF;
+  /* Deliberately identical to the light theme: the navigation is dark by
+     design, not by theme, and a cashier switching themes should not have to
+     relearn where the menu is. */
+  --sidebar: #123D2B;
+  --sidebar-foreground: #DCE9E0;
+  --sidebar-primary: #46C88A;
+  --sidebar-primary-foreground: #123D2B;
+  --sidebar-accent: #1D5A3E;
+  --sidebar-accent-foreground: #FFFFFF;
+  --sidebar-border: oklch(1 0 0 / 12%);
+  --sidebar-ring: #46C88A;
 }
 
 @layer base {
