@@ -1,11 +1,11 @@
 {
-  "name": "Flo",
-  "short_name": "Flo",
+  "name": "Tijarti — Gestion commerciale",
+  "short_name": "Tijarti",
   "description": "Smart Point of Sale for restaurants, salons, and retail",
   "start_url": "/dashboard",
   "display": "standalone",
   "background_color": "#ffffff",
-  "theme_color": "#3248FF",
+  "theme_color": "#14293F",
   "orientation": "any",
   "icons": [
     {

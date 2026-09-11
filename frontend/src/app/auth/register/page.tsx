@@ -71,7 +71,7 @@ export default function RegisterPage() {
     <div className="min-h-screen flex items-center justify-center bg-muted px-4 py-12">
       <div className="w-full max-w-lg">
         <div className="text-center mb-8">
-          <img src="/logo.svg" alt="Flo" width={120} height={77} className="mx-auto mb-3" />
+          <img src="/logo.png" alt="Tijarti" width={120} height={120} className="mx-auto mb-3" />
           <p className="text-muted-foreground mt-2">{t('auth.registerSubtitle')}</p>
         </div>
 

@@ -105,9 +105,16 @@ export default function AppSidebar() {
           <SidebarMenuItem>
             <SidebarMenuButton size="lg" asChild>
               <Link href={homeHref}>
-                <div className="flex aspect-square size-8 shrink-0 items-center justify-center rounded-md bg-sidebar-primary text-sidebar-primary-foreground font-semibold">
-                  {(currentTenant?.business_name || t('common.brandName')).charAt(0).toUpperCase()}
-                </div>
+                {/* The shop's own mark, not an initial in a coloured square.
+                    The logo carries its own light plate, so it reads as a badge
+                    against the navy rather than needing one drawn for it. */}
+                <img
+                  src="/logo.png"
+                  alt=""
+                  width={32}
+                  height={32}
+                  className="aspect-square size-8 shrink-0 rounded-md object-contain"
+                />
                 <div className="flex flex-col gap-0.5 min-w-0 leading-none">
                   <span className="font-semibold truncate">{currentTenant?.business_name || t('common.brandName')}</span>
                 </div>
