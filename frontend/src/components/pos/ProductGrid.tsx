@@ -5,6 +5,7 @@ import { useState } from 'react';
 import { ChevronLeft, ChevronRight, Search, SlidersHorizontal } from 'lucide-react';
 import type { Category, Product } from '@/lib/types';
 import { normaliseForSearch } from '@/lib/search-normalise';
+import { shelfTint, SHELF_INK } from '@/lib/shelf-colour';
 import { useCartStore } from '@/store/cart';
 import { usePosSettingsStore } from '@/store/pos-settings';
 import { nameToColor } from '@/lib/image-utils';
@@ -45,31 +46,6 @@ const CATEGORY_COLORS: Record<string, { bg: string; text: string; border: string
 function initialsFor(name: string): string {
   const word = (name || '').split(/\s+/).find((w) => /^\p{L}/u.test(w));
   return (word || name || '?').slice(0, 2).toUpperCase();
-}
-
-/**
- * A shelf's colour.
- *
- * The till being replaced colours every tile, which is what makes it quick to
- * scan — but its colours are per product and look arbitrary: three neighbours
- * from the same shelf come out magenta, cyan and orange. Here the colour comes
- * from the shelf, so a block of one colour is a block of one aisle and the eye
- * can use it. The twelve grounds are pale on purpose: each clears 12:1 against
- * the tile text, so the price stays the most legible thing on it.
- */
-const SHELF_TINTS = [
-  '#E3F0E8', '#E4ECF7', '#FBEEE0', '#F6E6EF', '#E7F1F4', '#F3EFDC',
-  '#EDE7F5', '#FBE9E7', '#E8F3E1', '#F0ECE4', '#E2F0F0', '#F7EAF0',
-];
-
-function shelfTint(categoryId: string | number | null | undefined): string {
-  const key = String(categoryId ?? '');
-  if (!key) return SHELF_TINTS[0];
-  // Deterministic: the same shelf keeps its colour between sessions, which is
-  // the whole point — a cashier learns "the blue block is tea".
-  let hash = 0;
-  for (let i = 0; i < key.length; i++) hash = (hash * 31 + key.charCodeAt(i)) >>> 0;
-  return SHELF_TINTS[hash % SHELF_TINTS.length];
 }
 
 function getCategoryColorClasses(color: string | null | undefined) {
@@ -281,9 +257,9 @@ export default function ProductGrid({
                 {/* Name then price, with the price given real weight: on a
                     shelf-scanning screen the cashier is confirming an amount,
                     not reading a menu. */}
-                <h3 className="font-medium text-[#1F2A24] text-xs line-clamp-3 leading-tight">{product.name}</h3>
+                <h3 className="font-medium text-xs line-clamp-3 leading-tight" style={{ color: SHELF_INK }}>{product.name}</h3>
                 <div className="flex items-center justify-between mt-1">
-                  <p className="text-[#123D2B] text-base font-bold tabular-nums">
+                  <p className="text-base font-bold tabular-nums" style={{ color: SHELF_INK }}>
                     {fmt(Number(product.price))}
                   </p>
                   <div className="flex items-center gap-1 shrink-0">

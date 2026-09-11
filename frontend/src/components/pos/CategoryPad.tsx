@@ -2,6 +2,7 @@
 
 import { useI18n } from '@/hooks/useI18n';
 import type { Category } from '@/lib/types';
+import { shelfTint, SHELF_INK } from '@/lib/shelf-colour';
 
 /**
  * The shelves, as a standing grid rather than a scrolling strip.
@@ -41,12 +42,21 @@ export default function CategoryPad({
             key={cat.id}
             onClick={() => onSelect(cat.id)}
             title={cat.name}
+            // The button wears the colour of the products it reveals, so the
+            // link between the two is visible rather than remembered.
+            //
+            // Selection is marked by an outline and weight, not by swapping
+            // the colour out: turning the current shelf green would break the
+            // one association the colour exists to make, at the exact moment
+            // the cashier is using it.
+            //
             // Two lines, then clipped. A shelf name that wraps to four lines
             // would push every button below it out of reach.
-            className={`min-h-[3rem] rounded px-1.5 py-1.5 text-xs font-medium leading-tight transition-colors line-clamp-2 ${
+            style={{ backgroundColor: shelfTint(cat.id), color: SHELF_INK }}
+            className={`min-h-[3rem] rounded px-1.5 py-1.5 text-xs leading-tight transition-shadow line-clamp-2 ${
               selected === cat.id
-                ? 'bg-brand text-white'
-                : 'border border-border bg-card text-foreground hover:bg-muted'
+                ? 'font-bold ring-2 ring-inset ring-[#123D2B] shadow-sm'
+                : 'font-medium hover:shadow-sm'
             }`}
           >
             {cat.name}
