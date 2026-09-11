@@ -21,7 +21,7 @@ export default function RegisterTotals({ itemCount }: { itemCount: number }) {
   const total = cart.items.reduce((sum, item) => sum + cartLineTotal(item), 0);
 
   return (
-    <div className="flex shrink-0 items-center justify-between gap-4 rounded-lg bg-[#123D2B] px-4 py-2.5 text-white">
+    <div className="flex shrink-0 items-center justify-between gap-4 rounded-lg bg-[color:var(--sidebar)] px-4 py-2.5 text-[color:var(--sidebar-foreground)]">
       <div className="flex items-baseline gap-2">
         <span className="text-xs font-medium uppercase tracking-wide text-white/60">
           {t('pos.items')}

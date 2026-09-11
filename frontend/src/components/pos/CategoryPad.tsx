@@ -55,7 +55,7 @@ export default function CategoryPad({
             style={{ backgroundColor: shelfTint(cat.id), color: SHELF_INK }}
             className={`min-h-[3rem] rounded px-1.5 py-1.5 text-xs leading-tight transition-shadow line-clamp-2 ${
               selected === cat.id
-                ? 'font-bold ring-2 ring-inset ring-[#123D2B] shadow-sm'
+                ? 'font-bold ring-2 ring-inset ring-[color:var(--sidebar)] shadow-sm'
                 : 'font-medium hover:shadow-sm'
             }`}
           >

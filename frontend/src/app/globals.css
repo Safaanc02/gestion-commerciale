@@ -17,48 +17,51 @@
   --background: oklch(1 0 0);
   /* Raised from 0.145 grey: at arm's length under shop lighting the old
      muted greys sat below comfortable reading contrast. */
-  --foreground: oklch(0.21 0.012 160);
+  --foreground: oklch(0.21 0.012 250);
   --card: oklch(1 0 0);
   --card-foreground: oklch(0.145 0 0);
   --popover: oklch(1 0 0);
   --popover-foreground: oklch(0.145 0 0);
-  /* #1B6B4A — the single accent, expressed in oklch like the rest of the
+  /* #1D4E89 — the single accent, expressed in oklch like the rest of the
      shadcn scale so components that derive shades from it stay consistent. */
-  --primary: oklch(0.472 0.093 160.5);
+  --primary: oklch(0.394 0.109 256.5);
   --primary-foreground: oklch(0.99 0.005 150);
   --secondary: oklch(0.97 0 0);
   --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.965 0.006 120);
-  --muted-foreground: oklch(0.47 0.014 160);
-  --accent: oklch(0.955 0.018 155);
-  --accent-foreground: oklch(0.35 0.07 160);
+  --muted: oklch(0.965 0.006 250);
+  --muted-foreground: oklch(0.47 0.014 250);
+  --accent: oklch(0.955 0.018 250);
+  --accent-foreground: oklch(0.35 0.07 256);
   --destructive: oklch(0.577 0.245 27.325);
   /* Hairlines. With cards no longer carrying a filled background, the border
      is what separates content — so it must read as a rule, not a box edge. */
-  --border: oklch(0.925 0.005 150);
-  --input: oklch(0.9 0.006 150);
-  --ring: oklch(0.472 0.093 160.5);
+  --border: oklch(0.925 0.005 250);
+  --input: oklch(0.9 0.006 250);
+  --ring: oklch(0.394 0.109 256.5);
   --chart-1: oklch(0.646 0.222 41.116);
   --chart-2: oklch(0.6 0.118 184.704);
   --chart-3: oklch(0.398 0.07 227.392);
   --chart-4: oklch(0.828 0.189 84.429);
   --chart-5: oklch(0.769 0.188 70.08);
-  /* The navigation is the one solid mass on screen: deep green, light type,
+  /* The navigation is the one solid mass on screen: deep navy, light type,
      the same in either theme. Everything else is white and quiet, so a glance
      at the edge of the screen tells you where you are without reading.
+     Navy also keeps out of the way of the shelf tints on the product tiles,
+     which are now the only other colour: the bar sits 10.7:1 clear of the
+     palest blue among them, so a block of tea is never mistaken for chrome.
      Every pair below is measured against WCAG AA on the sidebar ground:
-       #DCE9E0 on #123D2B  9.7:1   idle navigation
-       #FFFFFF on #1D5A3E  8.1:1   hovered and current page
-       #9DBBAA on #123D2B  5.9:1   section labels
-       #123D2B on #46C88A  5.7:1   the shop initial on its chip */
-  --sidebar: #123D2B;
-  --sidebar-foreground: #DCE9E0;
-  --sidebar-primary: #46C88A;
-  --sidebar-primary-foreground: #123D2B;
-  --sidebar-accent: #1D5A3E;
+       #D7E2EE on #14293F  11.3:1  idle navigation
+       #FFFFFF on #23486B   9.5:1  hovered and current page
+       #9BB2C9 on #14293F   6.8:1  section labels
+       #14293F on #63A8E8   5.9:1  the shop initial on its chip */
+  --sidebar: #14293F;
+  --sidebar-foreground: #D7E2EE;
+  --sidebar-primary: #63A8E8;
+  --sidebar-primary-foreground: #14293F;
+  --sidebar-accent: #23486B;
   --sidebar-accent-foreground: #FFFFFF;
   --sidebar-border: oklch(1 0 0 / 12%);
-  --sidebar-ring: #46C88A;
+  --sidebar-ring: #63A8E8;
 }
 
 body {
@@ -127,11 +130,11 @@ body {
   /* One accent for the whole application.
      `primary` used to be near-black while `brand` was an electric blue, so
      buttons and totals disagreed about which colour meant "this matters".
-     They now resolve to the same green. */
-  --color-brand: #1B6B4A;
-  --color-brand-light: #E7F3ED;
-  --color-brand-hover: #14523A;
-  --color-brand-ring: #1B6B4A66;
+     They now resolve to the same navy. */
+  --color-brand: #1D4E89;
+  --color-brand-light: #E6EEF8;
+  --color-brand-hover: #163C6B;
+  --color-brand-ring: #1D4E8966;
   --color-success: #00cc61;
   --color-success-light: #dcfce7;
   --color-success-hover: #00b355;
@@ -164,14 +167,14 @@ body {
   /* Deliberately identical to the light theme: the navigation is dark by
      design, not by theme, and a cashier switching themes should not have to
      relearn where the menu is. */
-  --sidebar: #123D2B;
-  --sidebar-foreground: #DCE9E0;
-  --sidebar-primary: #46C88A;
-  --sidebar-primary-foreground: #123D2B;
-  --sidebar-accent: #1D5A3E;
+  --sidebar: #14293F;
+  --sidebar-foreground: #D7E2EE;
+  --sidebar-primary: #63A8E8;
+  --sidebar-primary-foreground: #14293F;
+  --sidebar-accent: #23486B;
   --sidebar-accent-foreground: #FFFFFF;
   --sidebar-border: oklch(1 0 0 / 12%);
-  --sidebar-ring: #46C88A;
+  --sidebar-ring: #63A8E8;
 }
 
 @layer base {
