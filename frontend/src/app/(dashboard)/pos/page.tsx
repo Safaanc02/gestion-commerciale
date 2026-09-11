@@ -23,6 +23,7 @@ import CartTable from '@/components/pos/CartTable';
 import CategoryPad from '@/components/pos/CategoryPad';
 import RegisterActions from '@/components/pos/RegisterActions';
 import RegisterTotals from '@/components/pos/RegisterTotals';
+import ProductSearch from '@/components/pos/ProductSearch';
 import UnknownBarcodeModal from '@/components/pos/UnknownBarcodeModal';
 import AddonModal from '@/components/pos/AddonModal';
 import { WeightPad } from '@/components/pos/WeightPad';
@@ -927,6 +928,18 @@ export default function POSPage() {
 
       <div className="hidden md:flex flex-1 min-h-0 overflow-hidden p-3 gap-3">
         <div className="flex min-h-0 flex-1 min-w-0 flex-col gap-2">
+          {/* One search, at the top and holding focus: the cashier who knows
+              the product types instead of hunting the tile, and a scanner's
+              keystrokes land here without a click first. */}
+          <div className="flex shrink-0 items-center gap-3">
+            <ProductSearch
+              products={products}
+              search={search}
+              setSearch={setSearch}
+              onPick={handleProductClick}
+              onScan={handleScan}
+            />
+          </div>
           <RegisterTotals itemCount={itemCount} />
           <div className="flex min-h-0 flex-[2] gap-2">
             <div className="min-w-0 flex-1">
@@ -959,6 +972,7 @@ export default function POSPage() {
               onScan={handleScan}
               sidebarOpen={leftSidebarOpen}
               hideCategoryBar
+              hideSearch
             />
           </div>
         </div>

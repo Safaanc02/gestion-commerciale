@@ -79,6 +79,7 @@
   "backup.failedWith": "No se pudo hacer el respaldo: {error}",
   "backup.savedTo": "Respaldo guardado en {path}",
   "businessType.restaurant": "Restaurante",
+  "common.clear": "Borrar",
   "common.retry": "Reintentar",
   "common.next": "Siguiente",
   "common.previous": "Anterior",

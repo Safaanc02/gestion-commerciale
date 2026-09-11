@@ -79,6 +79,7 @@
   "backup.failedWith": "Falha no backup: {error}",
   "backup.savedTo": "Backup salvo em {path}",
   "businessType.restaurant": "Restaurante",
+  "common.clear": "Limpar",
   "common.retry": "Tentar de novo",
   "common.next": "Seguinte",
   "common.previous": "Anterior",

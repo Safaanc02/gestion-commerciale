@@ -79,6 +79,7 @@
   "backup.failedWith": "تعذّر إنشاء النسخة الاحتياطية: {error}",
   "backup.savedTo": "تم حفظ النسخة الاحتياطية في {path}",
   "businessType.restaurant": "مطعم",
+  "common.clear": "مسح",
   "common.retry": "إعادة المحاولة",
   "common.next": "التالي",
   "common.previous": "السابق",

@@ -4,6 +4,7 @@ import { useState } from 'react';
 
 import { ChevronLeft, ChevronRight, Search, SlidersHorizontal } from 'lucide-react';
 import type { Category, Product } from '@/lib/types';
+import { normaliseForSearch } from '@/lib/search-normalise';
 import { useCartStore } from '@/store/cart';
 import { usePosSettingsStore } from '@/store/pos-settings';
 import { nameToColor } from '@/lib/image-utils';
@@ -90,11 +91,13 @@ interface Props {
   sidebarOpen?: boolean;
   /** The register puts the shelves in a standing grid of their own. */
   hideCategoryBar?: boolean;
+  /** The register carries one search field, at the top of the screen. */
+  hideSearch?: boolean;
 }
 
 export default function ProductGrid({
   categories, products, selectedCategory, setSelectedCategory,
-  search, setSearch, onProductClick, onScan, sidebarOpen = true, hideCategoryBar = false,
+  search, setSearch, onProductClick, onScan, sidebarOpen = true, hideCategoryBar = false, hideSearch = false,
 }: Props) {
   const [page, setPage] = useState(0);
   const cart = useCartStore();
@@ -115,7 +118,7 @@ export default function ProductGrid({
 
   const matching = products.filter((p) => {
     const matchCat = !selectedCategory || p.category_id === selectedCategory;
-    const matchSearch = !search || p.name.toLowerCase().includes(search.toLowerCase());
+    const matchSearch = !search || normaliseForSearch(p.name).includes(normaliseForSearch(search));
     return matchCat && matchSearch;
   });
 
@@ -137,6 +140,7 @@ export default function ProductGrid({
   return (
     <div data-testid="pos-product-grid" className="flex-1 flex flex-col min-w-0 h-full overflow-hidden">
       <div className="shrink-0 mb-3">
+        {!hideSearch && (
         <div className="relative mb-2">
           <Search size={18} className="absolute start-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
           <input
@@ -161,6 +165,7 @@ export default function ProductGrid({
             className="w-full ps-10 pe-4 py-3 bg-card border border-border rounded-xl focus:border-brand focus:ring-2 focus:ring-brand/20 outline-none transition-colors text-base"
           />
         </div>
+        )}
         {!hideCategoryBar && (
         <div className="flex gap-2 pb-1 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           <button
