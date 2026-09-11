@@ -6,6 +6,7 @@ import { Bonjour } from 'bonjour-service';
 import { initDatabase, closeDatabase, SchemaVersionMismatchError } from './db';
 import { startServer, stopServer, getLocalIP, isServerRunning } from './server';
 import { cloudSync } from './services/cloud-sync';
+import { startBackupSchedule } from './services/backup-schedule';
 import { telemetry, sendEvent as sendTelemetryEvent } from './services/telemetry';
 import { googleDrive } from './services/google-drive';
 import { startKdsServer, stopKdsServer, getKdsPort, isKdsServerRunning } from './kds-server';
@@ -15,6 +16,14 @@ import { initFromDb as initWhatsAppFromDb, shutdown as shutdownWhatsApp } from '
 import log from 'electron-log/main';
 import { autoUpdater } from 'electron-updater';
 import { isAllowedLocalWindowUrl, isSafeExternalUrl } from './security/url-allowlist';
+import {
+  isPrivateLanUrl,
+  normaliseTillUrl,
+  readStationConfig,
+  scaleStationUrl,
+  writeStationConfig,
+  type StationConfig,
+} from './station-role';
 
 // ── GPU compatibility ────────────────────────────────────────────────────────
 // On Windows, some systems hit "GPU process exited unexpectedly" (exit code
@@ -204,6 +213,201 @@ if (gotSingleInstanceLock) {
       }
     }
   });
+}
+
+/**
+ * Ask this machine what it is, and don't proceed until it answers.
+ *
+ * Shown once per installation. Resolves with the chosen configuration; if the
+ * operator closes the window instead of choosing, the application quits rather
+ * than guessing — booting a scale station as a till would create a second,
+ * empty database and split the shop's sales in two.
+ */
+function askForStationRole(): Promise<StationConfig | null> {
+  return new Promise((resolve) => {
+    let answered: StationConfig | null = null;
+
+    const setupWindow = new BrowserWindow({
+      width: 760,
+      height: 620,
+      resizable: false,
+      title: 'Flo',
+      webPreferences: {
+        preload: path.join(__dirname, 'station-setup-preload.js'),
+        contextIsolation: true,
+        nodeIntegration: false,
+        sandbox: false,
+      },
+    });
+
+    ipcMain.handle('station-discover-tills', async () => discoverTillsOnLan());
+
+    ipcMain.handle('station-save-role', async (_event, raw: { role?: string; tillUrl?: string }) => {
+      if (raw?.role === 'till') {
+        answered = { role: 'till' };
+      } else if (raw?.role === 'scale') {
+        const url = normaliseTillUrl(String(raw.tillUrl ?? ''));
+        if (!url) {
+          return { ok: false, error: "Cette adresse n'est pas valide, ou n'est pas sur le réseau local." };
+        }
+        // Confirm something is actually answering before committing: an
+        // operator who mistypes one digit would otherwise end up with a
+        // permanently blank window and no idea why.
+        const reachable = await isTillReachable(url);
+        if (!reachable) {
+          return { ok: false, error: "Aucune caisse ne répond à cette adresse. Vérifiez qu'elle est allumée et sur le même réseau." };
+        }
+        answered = { role: 'scale', tillUrl: url };
+      } else {
+        return { ok: false, error: 'Choisissez le rôle de ce poste.' };
+      }
+
+      try {
+        writeStationConfig(app.getPath('userData'), answered);
+      } catch (err: any) {
+        answered = null;
+        return { ok: false, error: `Enregistrement impossible : ${err?.message ?? err}` };
+      }
+      setupWindow.close();
+      return { ok: true };
+    });
+
+    setupWindow.on('closed', () => {
+      ipcMain.removeHandler('station-discover-tills');
+      ipcMain.removeHandler('station-save-role');
+      resolve(answered);
+    });
+
+    setupWindow.loadFile(path.join(__dirname, 'station-setup.html'));
+  });
+}
+
+/** Tills advertising themselves over mDNS, as origins the operator can pick. */
+function discoverTillsOnLan(): Promise<string[]> {
+  return new Promise((resolve) => {
+    const found = new Set<string>();
+    let scanner: InstanceType<typeof Bonjour> | null = null;
+    let browser: { stop: () => void } | null = null;
+    let settled = false;
+
+    const finish = () => {
+      if (settled) return;
+      settled = true;
+      try { browser?.stop(); } catch { /* already stopped */ }
+      // Destroy the scanner too, not just the browser: leaving it open holds a
+      // multicast socket for the life of the process.
+      try { scanner?.destroy(); } catch { /* already gone */ }
+      resolve([...found]);
+    };
+
+    try {
+      scanner = new Bonjour();
+      browser = scanner.find({ type: 'http' }, (service: any) => {
+        // A shop LAN is full of http advertisements — printers, routers, the
+        // ISP box. Only tills answer to this name, which is what the till
+        // publishes in startMdns().
+        const name = String(service?.name ?? '');
+        if (!/flo/i.test(name)) return;
+        const port = service?.port ?? PORT;
+        for (const address of [...(service?.addresses ?? []), service?.host].filter(Boolean)) {
+          const host = String(address).replace(/\.$/, '');
+          const url = `http://${host.includes(':') ? `[${host}]` : host}:${port}`;
+          if (isPrivateLanUrl(url)) found.add(url);
+        }
+      }) as unknown as { stop: () => void };
+    } catch (err) {
+      console.warn('[Station] mDNS discovery unavailable:', err);
+      finish();
+      return;
+    }
+
+    // Bounded: the operator is standing in front of the machine waiting, and
+    // can always type the address by hand.
+    setTimeout(finish, 3000);
+  });
+}
+
+/** Whether a till is answering at this origin. */
+async function isTillReachable(origin: string): Promise<boolean> {
+  try {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 4000);
+    const response = await fetch(`${origin}/api/health`, { signal: controller.signal });
+    clearTimeout(timer);
+    return response.ok;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * The scale station window: the same application, loaded from the till.
+ *
+ * No database and no server are started on this machine — it is a client of
+ * the till, which is what keeps one catalogue and one set of prices.
+ */
+function createScaleStationWindow(tillUrl: string): void {
+  mainWindow = new BrowserWindow({
+    width: 1280,
+    height: 860,
+    minWidth: 1024,
+    minHeight: 700,
+    title: 'Flo — Poste balance',
+    webPreferences: {
+      preload: path.join(__dirname, 'preload.js'),
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: false,
+    },
+    show: false,
+  });
+
+  mainWindow.once('ready-to-show', () => mainWindow?.show());
+
+  // Navigation is pinned to the till's own origin: a compromised or mistyped
+  // page must not be able to walk this window somewhere else.
+  const tillOrigin = new URL(tillUrl).origin;
+  mainWindow.webContents.on('will-navigate', (event, url) => {
+    try {
+      if (new URL(url).origin !== tillOrigin) event.preventDefault();
+    } catch {
+      event.preventDefault();
+    }
+  });
+  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
+    if (isSafeExternalUrl(url)) shell.openExternal(url);
+    return { action: 'deny' };
+  });
+
+  mainWindow.loadURL(scaleStationUrl(tillUrl)).catch((err) => {
+    console.error('[Station] Could not reach the till:', err);
+  });
+
+  mainWindow.webContents.on('did-fail-load', (_e, _code, description) => {
+    // The till being switched off mid-shift is the ordinary case, so it gets a
+    // readable page with a retry rather than Chromium's error screen.
+    const message = String(description || 'connexion impossible').replace(/"/g, '');
+    mainWindow?.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(`
+      <html lang="fr"><head><meta charset="utf-8"><title>Flo</title></head>
+      <body style="font-family:-apple-system,Segoe UI,Roboto,sans-serif;background:#005A9E;color:#fff;
+                   display:flex;align-items:center;justify-content:center;height:100vh;margin:0;text-align:center">
+        <div style="max-width:520px;padding:24px">
+          <h1 style="font-size:24px;margin:0 0 10px">La caisse ne répond pas</h1>
+          <p style="opacity:.85;line-height:1.55;margin:0 0 18px">
+            Le poste balance n'arrive pas à joindre <b>${tillOrigin}</b>.<br>
+            Vérifiez que la caisse est allumée et sur le même réseau.
+          </p>
+          <p style="opacity:.6;font-size:13px">${message}</p>
+          <button onclick="location.href='${scaleStationUrl(tillUrl)}'"
+                  style="margin-top:18px;padding:12px 22px;border:0;border-radius:10px;
+                         background:#fff;color:#005A9E;font-size:15px;font-weight:600;cursor:pointer">
+            Réessayer
+          </button>
+        </div>
+      </body></html>`));
+  });
+
+  mainWindow.on('closed', () => { mainWindow = null; });
 }
 
 function createWindow(): void {
@@ -567,6 +771,30 @@ async function initialize(): Promise<void> {
   try {
     console.log('[Flo] Initializing...');
 
+    // What this machine is decides almost everything below. A scale station
+    // starts no database, no server and no background services: it is a client
+    // of the till, which is what keeps one catalogue and one set of prices
+    // across the shop.
+    let station = readStationConfig(app.getPath('userData'));
+    if (!station) {
+      console.log('[Flo] No station role set — asking.');
+      station = await askForStationRole();
+      if (!station) {
+        console.log('[Flo] No role chosen; quitting rather than guessing.');
+        isQuitting = true;
+        app.quit();
+        return;
+      }
+    }
+    console.log(`[Flo] Station role: ${station.role}`);
+
+    if (station.role === 'scale') {
+      createScaleStationWindow(station.tillUrl!);
+      createTray();
+      createMenu();
+      return;
+    }
+
     console.log('[Flo] Initializing database...');
     initDatabase();
 
@@ -576,6 +804,7 @@ async function initialize(): Promise<void> {
     cloudSync.start();
     telemetry.start();
     googleDrive.start();
+    startBackupSchedule();
 
     console.log('[Flo] Starting KDS server on port 3002...');
     await startKdsServer();

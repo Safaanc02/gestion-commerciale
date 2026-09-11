@@ -7,6 +7,7 @@ import * as fs from 'fs';
 import * as bcrypt from 'bcryptjs';
 import * as crypto from 'crypto';
 import { BUNDLED_COUNTRY_PACKS, bundledPackVersionId } from './tax-packs/bundled';
+import { DEFAULT_SCALE_LABEL_FORMAT } from './lib/scale-barcode';
 
 let db: Database.Database;
 let dbHealthError: string | null = null;
@@ -186,7 +187,7 @@ export function getDbPath(): string {
   return path.join(userDataPath, 'flo.db');
 }
 
-function getBackupDir(): string {
+export function getBackupDir(): string {
   const userDataPath = app.getPath('userData');
   return path.join(userDataPath, 'backups');
 }
@@ -3386,6 +3387,209 @@ export const MIGRATIONS: { version: number; name: string; up: () => void }[] = [
       copyIfPresent('bill_show_gstn', 'bill_show_tax_id');
     },
   },
+  {
+    version: 58,
+    name: 'add_weighed_goods_unit_of_measure_and_scale_labels',
+    up: () => {
+      // Bulk goods (rice, lentils, pasta, flour) are sold by weight, so a line
+      // quantity becomes a decimal like 0.734 kg.
+      //
+      // Everything here is ADDITIVE — no table is rebuilt. In particular
+      // order_items.quantity keeps its INTEGER declaration: SQLite's INTEGER
+      // affinity only converts a REAL when the conversion is lossless, so
+      // 0.734 is stored as REAL and SUM() stays exact. See the lock comment
+      // above that column in createSchema().
+      //
+      // Nothing is added to createSchema() either. That is deliberate and is
+      // this file's dominant pattern (voided_at in v34,
+      // station_assignments_configured in v56 are both absent from it): one
+      // code path means a fresh install and an upgraded one converge by
+      // construction, which is exactly the divergence createSchema() warns
+      // about.
+      //
+      // Every operation is guarded, because upgrade-path.test.ts rewinds
+      // user_version and replays this migration over an already-migrated
+      // database.
+
+      // ── products: declare what the product is sold by ──────────────────
+      const productCols = getColumns(db, 'products');
+      const addProductColumn = (name: string, decl: string) => {
+        if (!productCols.includes(name)) {
+          db.exec(`ALTER TABLE products ADD COLUMN ${name} ${decl}`);
+        }
+      };
+      addProductColumn('unit_of_measure', `TEXT NOT NULL DEFAULT 'unit'`);
+      // Decimals the quantity may carry: 0 for countable, 3 (the gram) for kg.
+      addProductColumn('quantity_precision', 'INTEGER NOT NULL DEFAULT 0');
+      // The item code the scale prints inside a label barcode. Kept apart from
+      // products.barcode so a bulk product can still own a real GTIN.
+      addProductColumn('plu_code', 'TEXT');
+      addProductColumn('tare_default', 'REAL NOT NULL DEFAULT 0');
+      // Upper bound per line, as a cheap guard against a misread label: a
+      // shifted weight field turns 0.734 kg into 7.34 kg.
+      addProductColumn('max_quantity', 'REAL');
+
+      // A real uniqueness guarantee for the scale item code — unlike
+      // products.barcode, whose uniqueness is only a SELECT in the API and so
+      // cannot survive a CSV import or two concurrent writes. Partial, so the
+      // many products without a PLU (and soft-deleted ones) never collide.
+      db.exec(`
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_products_plu_code
+        ON products(plu_code)
+        WHERE plu_code IS NOT NULL AND plu_code != '' AND deleted_at IS NULL
+      `);
+
+      // ── order_items: freeze how this line was measured ─────────────────
+      // A snapshot, exactly as product_name and product_sku already are:
+      // reprinting an old receipt must show the unit that applied at the time
+      // of sale, even if the product has since been switched from kg to unit.
+      const itemCols = getColumns(db, 'order_items');
+      const addItemColumn = (name: string, decl: string) => {
+        if (!itemCols.includes(name)) {
+          db.exec(`ALTER TABLE order_items ADD COLUMN ${name} ${decl}`);
+        }
+      };
+      addItemColumn('unit_of_measure', `TEXT NOT NULL DEFAULT 'unit'`);
+      // How the quantity got here: 'unit' (countable), 'scale_label' (decoded
+      // from a printed label) or 'manual' (keyed in at the till). Lets a
+      // disputed line be audited without re-deriving it from the raw scan.
+      addItemColumn('quantity_source', `TEXT NOT NULL DEFAULT 'unit'`);
+      // 'computed' = unit price x quantity. 'label' = the amount came from a
+      // price-embedded label and is authoritative over any recomputation.
+      addItemColumn('amount_source', `TEXT NOT NULL DEFAULT 'computed'`);
+      addItemColumn('scan_raw', 'TEXT');
+
+      // ── settings: scale-label decoding, shipped OFF ────────────────────
+      // Disabled on purpose. A scale configured without the internal check
+      // digit shifts the weight field by one position while leaving the
+      // EAN-13 check digit perfectly valid — the customer is then billed a
+      // weight wrong by a factor of ten, and nothing can detect it. The
+      // shopkeeper must first match a real printed label against
+      // encodeScaleLabel()'s output in Settings > Scale.
+      //
+      // The seeded format row is a convenience for discoverability, never a
+      // hard dependency: readers must still fall back to
+      // DEFAULT_SCALE_LABEL_FORMAT when the row is missing or its JSON is
+      // unreadable.
+      const seedSetting = db.prepare(
+        'INSERT OR IGNORE INTO settings (key, value, updated_at) VALUES (?, ?, CURRENT_TIMESTAMP)'
+      );
+      seedSetting.run('scale_labels_enabled', 'false');
+      seedSetting.run('scale_label_format', JSON.stringify(DEFAULT_SCALE_LABEL_FORMAT));
+    },
+  },
+  {
+    version: 59,
+    name: 'record_manual_price_overrides',
+    up: () => {
+      // Shelf prices move faster than a catalogue does, so a cashier has to be
+      // able to charge what the label says. That is a legitimate daily need
+      // and a well-known way for a till to leak money, so the override is
+      // recorded rather than merely allowed: the price actually charged goes
+      // in unit_price, and what the catalogue said at that moment goes here.
+      // Without the pair, an undercharge is indistinguishable from a price
+      // that had simply been updated.
+      const itemCols = getColumns(db, 'order_items');
+      if (!itemCols.includes('original_unit_price')) {
+        db.exec('ALTER TABLE order_items ADD COLUMN original_unit_price REAL');
+      }
+
+      const seedSetting = db.prepare(
+        'INSERT OR IGNORE INTO settings (key, value, updated_at) VALUES (?, ?, CURRENT_TIMESTAMP)'
+      );
+      seedSetting.run('price_override_enabled', 'true');
+
+      // Loyalty points and per-product cashback are switched off. A corner
+      // grocery sells bread and rice to neighbours it already knows; a points
+      // scheme adds a customer lookup to every sale and a percentage to every
+      // product form, for something nobody asked for.
+      //
+      // Switched off, not removed: the whole feature is gated on this one
+      // setting across the product screen, the payment screen and checkout, so
+      // a shop that later wants it turns it back on in Settings and everything
+      // reappears — including any points already earned.
+      db.prepare(
+        `INSERT INTO settings (key, value, updated_at) VALUES ('loyalty_enabled', 'false', CURRENT_TIMESTAMP)
+         ON CONFLICT(key) DO UPDATE SET value = 'false', updated_at = excluded.updated_at`
+      ).run();
+      // A ceiling on how far a keyed price may sit from the catalogue. It is
+      // there to catch the missing decimal point — 1250 for 12,50 — not to
+      // second-guess the shopkeeper, so it is generous. 0 disables the check.
+      seedSetting.run('price_override_max_percent', '200');
+    },
+  },
+  {
+    version: 60,
+    name: 'disable_discounts_for_grocery',
+    up: () => {
+      // Discounts are switched off. A grocery sells at the shelf price, and
+      // the one case that genuinely looked like a discount — a price that has
+      // changed — is handled properly by the keyed price added in v59, which
+      // records what the catalogue said alongside what was charged.
+      //
+      // Off by setting, not by deletion: the endpoints, the ceilings and the
+      // approval flow all remain, and past bills keep showing the discount
+      // they were actually given. A shop that wants them turns this back on.
+      db.prepare(
+        `INSERT INTO settings (key, value, updated_at) VALUES ('discount_enabled', 'false', CURRENT_TIMESTAMP)
+         ON CONFLICT(key) DO UPDATE SET value = 'false', updated_at = excluded.updated_at`
+      ).run();
+    },
+  },
+  {
+    version: 61,
+    name: 'arabic_receipt_printing',
+    up: () => {
+      // Which Arabic code page the receipt printer is set to.
+      //
+      // 'none' keeps the previous behaviour, where anything outside ASCII is
+      // dropped from the line. That has to stay the default: sending Arabic
+      // bytes to a printer that is not in an Arabic mode produces a line of
+      // wrong glyphs, which is worse than the plain-Latin line it replaces.
+      //
+      // The two real options differ in what the printer is expected to do.
+      // CP864 holds already-shaped glyphs, so the shaping happens here. CP1256
+      // holds base letters and the printer shapes them itself. Which one a
+      // given machine wants is not discoverable from software, so the shop
+      // prints the test page and picks the line that reads correctly.
+      db.prepare(
+        `INSERT OR IGNORE INTO settings (key, value, updated_at)
+         VALUES ('printer_arabic_codepage', 'none', CURRENT_TIMESTAMP)`
+      ).run();
+      // The number that selects that code page, sent as ESC t n. Printers do
+      // not agree on it — 22 and 50 are both common for Arabic — so it is a
+      // setting rather than a constant, and the test page prints under several.
+      db.prepare(
+        `INSERT OR IGNORE INTO settings (key, value, updated_at)
+         VALUES ('printer_arabic_charset_id', '22', CURRENT_TIMESTAMP)`
+      ).run();
+    },
+  },
+  {
+    version: 62,
+    name: 'scheduled_backups',
+    up: () => {
+      // On by default, and deliberately so. Before this, a backup happened
+      // before a migration or when somebody clicked — a shop that never
+      // clicked had none, and a dead disk took the catalogue and every sale
+      // with it. Opting in would have left exactly the shops that most need
+      // it without one.
+      db.prepare(`INSERT OR IGNORE INTO settings (key, value, updated_at)
+                  VALUES ('backup_auto_enabled', 'true', CURRENT_TIMESTAMP)`).run();
+      db.prepare(`INSERT OR IGNORE INTO settings (key, value, updated_at)
+                  VALUES ('backup_interval_minutes', '60', CURRENT_TIMESTAMP)`).run();
+      // Thirty hourly copies is somewhat over a day of history, and a few tens
+      // of megabytes. Enough to walk back past a bad import noticed the next
+      // morning.
+      db.prepare(`INSERT OR IGNORE INTO settings (key, value, updated_at)
+                  VALUES ('backup_keep', '30', CURRENT_TIMESTAMP)`).run();
+      // Empty until a shop names somewhere off this machine. A default would
+      // be a mirror onto the same disk: reassuring, and no protection at all
+      // against the failure that matters.
+      db.prepare(`INSERT OR IGNORE INTO settings (key, value, updated_at)
+                  VALUES ('backup_mirror_path', '', CURRENT_TIMESTAMP)`).run();
+    },
+  },
 ];
 
 function syncBackupBeforeMigration(fromVersion: number, toVersion: number): void {
@@ -3720,6 +3924,17 @@ function createSchema(): void {
       product_name TEXT NOT NULL,
       product_sku TEXT,
       unit_price REAL NOT NULL,
+      -- Declared INTEGER, but this column DOES hold weighed quantities such as
+      -- 0.734 kg. SQLite's INTEGER affinity converts a REAL only when the
+      -- conversion is lossless, so 0.734 is stored as REAL (typeof = 'real')
+      -- and SUM() stays exact.
+      --
+      -- Do NOT "fix" this to REAL. Changing a column type in SQLite means
+      -- rebuilding the table, and order_items' live column list is NOT the one
+      -- below: it is this list MINUS "addons" (dropped by v30) PLUS
+      -- "voided_at" (added by v34). A hand-written rebuild misses one or the
+      -- other, which either drops the void history or leaves the app unable to
+      -- start. There is nothing to gain: the value already round-trips.
       quantity INTEGER NOT NULL DEFAULT 1,
       subtotal REAL NOT NULL,
       tax_amount REAL DEFAULT 0,
@@ -4094,11 +4309,22 @@ function seedInstallDefaults(): void {
     db.prepare('INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)').run(key, value);
 
   insert('business_name', '');
-  insert('business_type', 'restaurant');
-  insert('country', 'IN');
-  insert('currency', 'INR');
-  insert('currency_symbol', '₹');
-  insert('timezone', 'Asia/Kolkata');
+  // 'retail' rather than 'restaurant': this fork is a grocery till. The value
+  // is not merely cosmetic — the renderer keys 17 decisions off it (dine-in,
+  // tables, guest counts, kitchen tickets), so setting it here is what keeps
+  // a supermarket from being asked which table the customer is sitting at.
+  // It is deliberately a setting and not deleted code: the restaurant screens
+  // still work for anyone who wants them.
+  insert('business_type', 'retail');
+  insert('country', 'MA');
+  insert('currency', 'MAD');
+  // "DH" is what Moroccan price tags, receipts and shop signs actually say —
+  // CLDR only knows the ISO code. Two characters rather than three also fits
+  // the receipt's amount column, which resolveCurrencyPrefix() sizes at two.
+  // Not the Arabic د.م.: a generic ESC/POS printer cannot render Arabic, so
+  // that symbol would vanish from every printed total.
+  insert('currency_symbol', 'DH');
+  insert('timezone', 'Africa/Casablanca');
   insert('address', '');
   insert('phone', '');
   insert('email', '');
