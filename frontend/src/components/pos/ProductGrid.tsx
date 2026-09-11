@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import { ChevronLeft, ChevronRight, Search, SlidersHorizontal } from 'lucide-react';
 import type { Category, Product } from '@/lib/types';
@@ -85,12 +85,21 @@ export default function ProductGrid({
   // Adjusted during render rather than in an effect — React's own guidance for
   // resetting state when a prop changes, and the pattern the dashboard uses:
   // an effect here would render the wrong page once before correcting itself.
+  const scrollRef = useRef<HTMLDivElement>(null);
   const filterKey = `${selectedCategory ?? ''}:${search}`;
   const [syncedFilter, setSyncedFilter] = useState(filterKey);
   if (filterKey !== syncedFilter) {
     setSyncedFilter(filterKey);
     setPage(0);
   }
+
+  // Back to the top of the list when the shelf or the search changes. Without
+  // this the grid kept the scroll position of the shelf just left, so picking a
+  // new one showed its middle and the cashier had to scroll up to find the
+  // first product.
+  useEffect(() => {
+    if (scrollRef.current) scrollRef.current.scrollTop = 0;
+  }, [filterKey]);
 
   const matching = products.filter((p) => {
     const matchCat = !selectedCategory || p.category_id === selectedCategory;
@@ -177,7 +186,7 @@ export default function ProductGrid({
         )}
       </div>
 
-      <div className="flex-1 overflow-y-auto pb-20 md:pb-0">
+      <div ref={scrollRef} className="flex-1 overflow-y-auto pb-20 md:pb-0">
         {/* Sized for fingers, not a mouse pointer.
             The column count now follows the screen rather than the sidebar
             alone: at 768px the previous fixed 4 columns left roughly 51px per

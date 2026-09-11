@@ -185,7 +185,7 @@ export const usePosSettingsStore = create<PosSettingsState>()(
       // negligible real-world usage didn't justify keeping a second paper
       // layout alive. A browser that saved 'a4'/'a5' before the removal
       // would otherwise keep a value nothing in the app still recognizes.
-      version: 2,
+      version: 3,
       migrate: (persisted, version) => {
         const state = persisted as Record<string, unknown>;
         if (version < 1) {
@@ -198,6 +198,17 @@ export const usePosSettingsStore = create<PosSettingsState>()(
             delete state.billShowGstn;
           }
           delete state.includeGstOnBill;
+        }
+        if (version < 3) {
+          // Turn the product tiles' image placeholders off for browsers that
+          // saved them on. The default changed, but a persisted value wins over
+          // a default — so every till that had ever run the application kept
+          // drawing a large coloured square per product, tripling the height of
+          // every tile and burying the shelf below the fold. This catalogue has
+          // no photographs at all, so the squares showed two letters of a name
+          // and nothing else. A shop that photographs its products turns it
+          // back on in settings.
+          state.showProductImages = false;
         }
         if (version < 2) {
           if (state.webPrintSize === 'a4' || state.webPrintSize === 'a5') {
