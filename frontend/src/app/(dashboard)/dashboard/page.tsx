@@ -5,12 +5,15 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useAuthStore } from '@/store/auth';
 import api from '@/lib/api';
-import { Banknote, ChefHat, Clock, LayoutGrid, TrendingUp, ClipboardList, ArrowRight, Timer, Trophy, Tags, BarChart3, Wallet } from 'lucide-react';
+import { Banknote, Receipt, PackageSearch, TrendingUp, ClipboardList, ArrowRight, Trophy, Tags, BarChart3, Wallet } from 'lucide-react';
 import { useI18n } from '@/hooks/useI18n';
 import toast from 'react-hot-toast';
 import { useFormatCurrency } from '@/hooks/useFormatCurrency';
 import { getCountryByCode } from '@/lib/countries';
-import { PAYMENT_METHODS } from '@/lib/payment-methods';
+import { PAYMENT_METHOD_LABELS } from '@/lib/payment-methods';
+import { formatQuantity } from '@units';
+import QuickSell from '@/components/pos/QuickSell';
+import { getCurrencySymbol } from '@/lib/countries';
 
 interface PaymentMethodBreakdown {
   method: string | null;
@@ -20,9 +23,8 @@ interface PaymentMethodBreakdown {
 
 interface DailyStats {
   sales: number;
-  runningOrders: number;
-  pendingOrders: number;
-  tablesOccupied: number;
+  ticketsToday: number;
+  lowStockCount: number;
   paymentMethods: PaymentMethodBreakdown[];
 }
 
@@ -37,7 +39,8 @@ interface DaySummary {
 interface TopProduct {
   product_id: number;
   product_name: string;
-  total_quantity: number;
+  total_units: number;
+  total_kg: number;
   total_revenue: number;
   order_count: number;
 }
@@ -116,7 +119,7 @@ const orderStatusColor: Record<string, string> = {
   preparing: 'text-blue-600',
   ready: 'text-green-600',
   served: 'text-purple-600',
-  completed: 'text-gray-500',
+  completed: 'text-muted-foreground',
   cancelled: 'text-red-500',
 };
 
@@ -138,6 +141,7 @@ export default function DashboardPage() {
   const isOwner = currentTenant?.role === 'owner';
   const fmt = useFormatCurrency();
   const locale = currentTenant?.country ? (getCountryByCode(currentTenant.country)?.locale ?? 'en-US') : 'en-US';
+  const currency = getCurrencySymbol(currentTenant?.currency || 'MAD', locale);
   const timeZone = currentTenant?.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone;
   const todayLocal = getLocalDateString(new Date(), timeZone);
   const [selectedDate, setSelectedDate] = useState(todayLocal);
@@ -195,48 +199,50 @@ export default function DashboardPage() {
   // that don't retroactively apply to a past date (an order isn't "pending"
   // in history — it has a final status). When viewing a past date, swap them
   // for the day's actual totals from /reports/summary instead.
+  // A grocery has no order in progress and no occupied table. What replaces
+  // them is what a shopkeeper actually looks at first: how many tickets were
+  // rung up, and what is about to run out.
+  /**
+   * How much of a product was sold.
+   *
+   * Units and kilos are reported separately by the API because adding 0.734 kg
+   * of lentils to 3 tins gives a number that means nothing. A product is
+   * normally one or the other, so only the side that has any is shown.
+   */
+  const soldLabel = (units: number, kg: number, orders: number) => {
+    const parts: string[] = [];
+    if (Number(units) > 0) parts.push(localizeTemplate(t('dashboard.soldUnits'), { quantity: units }));
+    if (Number(kg) > 0) parts.push(formatQuantity(Number(kg), 'kg', locale, 3));
+    if (parts.length === 0) parts.push(localizeTemplate(t('dashboard.soldUnits'), { quantity: 0 }));
+    return `${parts.join(' · ')} — ${localizeTemplate(t('dashboard.inOrders'), { orders })}`;
+  };
+
   const dateScopedTiles = isToday
     ? [
         {
-          label: t('dashboard.runningOrders'),
-          value: stats?.runningOrders ?? 0,
-          icon: ChefHat,
-          color: 'bg-blue-50 border-blue-200',
-          iconColor: 'text-blue-600',
+          label: t('dashboard.ticketsToday'),
+          value: stats?.ticketsToday ?? 0,
+          icon: Receipt,
           href: '/orders',
         },
         {
-          label: t('dashboard.pendingOrders'),
-          value: stats?.pendingOrders ?? 0,
-          icon: Clock,
-          color: 'bg-yellow-50 border-yellow-200',
-          iconColor: 'text-yellow-600',
-          href: '/orders',
-        },
-        {
-          label: t('dashboard.tablesOccupied'),
-          value: stats?.tablesOccupied ?? 0,
-          icon: LayoutGrid,
-          color: 'bg-purple-50 border-purple-200',
-          iconColor: 'text-purple-600',
-          href: '/tables',
+          label: t('dashboard.lowStock'),
+          value: stats?.lowStockCount ?? 0,
+          icon: PackageSearch,
+          href: '/products',
         },
       ]
     : [
         {
           label: t('dashboard.orders'),
           value: daySummary?.orders.count ?? 0,
-          icon: ChefHat,
-          color: 'bg-blue-50 border-blue-200',
-          iconColor: 'text-blue-600',
+          icon: Receipt,
           href: '/orders',
         },
         {
           label: t('dashboard.newCustomers'),
           value: daySummary?.customers.new ?? 0,
-          icon: Clock,
-          color: 'bg-yellow-50 border-yellow-200',
-          iconColor: 'text-yellow-600',
+          icon: Trophy,
           href: '/customers',
         },
       ];
@@ -246,8 +252,6 @@ export default function DashboardPage() {
       label: isToday ? t('dashboard.todaySales') : t('dashboard.sales'),
       value: fmt(isToday ? (stats?.sales ?? 0) : (daySummary?.bills.collected ?? 0)),
       icon: Banknote,
-      color: 'bg-green-50 border-green-200',
-      iconColor: 'text-green-600',
       href: '/orders',
     },
     ...dateScopedTiles,
@@ -255,33 +259,28 @@ export default function DashboardPage() {
       label: t('dashboard.aov'),
       value: fmt(insights?.aov ?? 0),
       icon: TrendingUp,
-      color: 'bg-teal-50 border-teal-200',
-      iconColor: 'text-teal-600',
       href: '/orders',
     },
-    {
-      label: t('dashboard.avgPrepTime'),
-      value: insights?.avgPrepTimeMinutes != null ? localizeTemplate(t('dashboard.minutesValue'), { minutes: insights.avgPrepTimeMinutes }) : '—',
-      icon: Timer,
-      color: 'bg-orange-50 border-orange-200',
-      iconColor: 'text-orange-600',
-      href: '/orders',
-    },
+    // "Average preparation time" measured how long a kitchen took between
+    // order and ready. A grocery prepares nothing, so the tile was always
+    // showing a dash.
   ];
 
   return (
     <div className="p-6">
       <div className="mb-6 flex items-center justify-between gap-4 flex-wrap">
-        <h1 className="text-2xl font-bold text-gray-900">{t('dashboard.title')}</h1>
+        <h1 className="text-2xl font-bold text-foreground">{t('dashboard.title')}</h1>
         <input
           type="date"
           value={selectedDate}
           max={todayLocal}
           onChange={(e) => e.target.value && setSelectedDate(e.target.value)}
-          className="px-3 py-1.5 text-sm border border-gray-200 rounded-lg text-gray-700 focus:outline-none focus:ring-2 focus:ring-brand/30"
+          className="px-3 py-1.5 text-sm border border-border rounded-lg text-foreground focus:outline-none focus:ring-2 focus:ring-brand/30"
           aria-label={t('dashboard.selectDate')}
         />
       </div>
+
+      <QuickSell currency={currency} />
 
       {loading ? (
         <div className="flex items-center justify-center py-20">
@@ -289,18 +288,36 @@ export default function DashboardPage() {
         </div>
       ) : (
         <>
-          <div className="grid grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
-            {tiles.map((tile) => (
+          {/* Four across, not three. There are always four figures here, and a
+              three-column grid dropped the fourth onto a row of its own,
+              stranded under the first. */}
+          {/* One band, four cells, hairlines between them — not four floating
+              boxes. Boxed cards each drew their own frame and the eye had to
+              cross four borders to compare four numbers that belong together.
+              The first cell is the day's takings and carries the only colour
+              and the largest type; the rest are context for it. */}
+          <div className="mb-8 grid grid-cols-2 divide-y divide-border overflow-hidden rounded-lg border border-border lg:grid-cols-4 lg:divide-y-0 lg:divide-x">
+            {tiles.map((tile, index) => (
               <Link
                 key={tile.label}
                 href={tile.href}
-                className={`rounded-xl border p-5 ${tile.color} transition-transform hover:-translate-y-0.5 hover:shadow-sm`}
+                className="group flex flex-col gap-3 p-5 transition-colors hover:bg-muted/50"
               >
-                <div className="flex items-center justify-between mb-3">
-                  <span className="text-sm font-medium text-gray-600">{tile.label}</span>
-                  <tile.icon size={20} className={tile.iconColor} />
+                <div className="flex items-center gap-2">
+                  <tile.icon
+                    size={16}
+                    strokeWidth={1.75}
+                    className={`shrink-0 ${index === 0 ? 'text-brand' : 'text-muted-foreground'}`}
+                  />
+                  <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                    {tile.label}
+                  </span>
                 </div>
-                <p className="text-3xl font-bold text-gray-900">
+                <p
+                  className={`font-bold tabular-nums leading-none ${
+                    index === 0 ? 'text-3xl text-brand' : 'text-2xl text-foreground'
+                  }`}
+                >
                   {tile.value}
                 </p>
               </Link>
@@ -309,10 +326,10 @@ export default function DashboardPage() {
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             {/* Recent Orders */}
-            <div className="bg-white rounded-xl border border-gray-100 overflow-hidden">
-              <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
-                <h2 className="flex items-center gap-2 font-semibold text-gray-900">
-                  <ClipboardList size={16} className="text-gray-400" />
+            <div className="bg-card rounded-xl border border-border overflow-hidden">
+              <div className="flex items-center justify-between px-4 py-3 border-b border-border">
+                <h2 className="flex items-center gap-2 font-semibold text-foreground">
+                  <ClipboardList size={16} className="text-muted-foreground" />
                   {isToday ? t('dashboard.recentOrders') : t('dashboard.orders')}
                 </h2>
                 <Link href="/orders" className="flex items-center gap-1 text-xs text-brand hover:text-brand-hover font-medium">
@@ -320,27 +337,27 @@ export default function DashboardPage() {
                 </Link>
               </div>
               {recentOrders.length === 0 ? (
-                <p className="px-4 py-6 text-sm text-gray-400 text-center">{t('dashboard.noOrdersYet')}</p>
+                <p className="px-4 py-6 text-sm text-muted-foreground text-center">{t('dashboard.noOrdersYet')}</p>
               ) : (
-                <div className="divide-y divide-gray-50">
+                <div className="divide-y divide-border">
                   {recentOrders.map((order) => (
                     <Link
                       key={order.id}
                       href="/orders"
-                      className="flex items-center justify-between px-4 py-2.5 hover:bg-gray-50 transition-colors"
+                      className="flex items-center justify-between px-4 py-2.5 hover:bg-muted/50 transition-colors"
                     >
                       <div className="min-w-0">
                         <div className="flex items-center gap-2">
-                          <span className="text-sm font-medium text-gray-900">#{order.order_number}</span>
-                          <span className={`text-xs font-medium ${orderStatusColor[order.status] || 'text-gray-500'}`}>
+                          <span className="text-sm font-medium text-foreground">#{order.order_number}</span>
+                          <span className={`text-xs font-medium ${orderStatusColor[order.status] || 'text-muted-foreground'}`}>
                             {t(`orders.${order.status}` as 'orders.pending' | 'orders.preparing' | 'orders.ready' | 'orders.served' | 'orders.completed' | 'orders.cancelled')}
                           </span>
                         </div>
-                        <p className="text-xs text-gray-400 truncate">
+                        <p className="text-xs text-muted-foreground truncate">
                           {order.customer_name || order.table_name || t('dashboard.walkIn')}
                         </p>
                       </div>
-                      <span className="text-sm font-semibold text-gray-900 shrink-0">
+                      <span className="text-sm font-semibold text-foreground shrink-0">
                         {fmt(Number(order.total))}
                       </span>
                     </Link>
@@ -350,10 +367,10 @@ export default function DashboardPage() {
             </div>
 
             {/* Top Products Today */}
-            <div className="bg-white rounded-xl border border-gray-100 overflow-hidden">
-              <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
-                <h2 className="flex items-center gap-2 font-semibold text-gray-900">
-                  <TrendingUp size={16} className="text-gray-400" />
+            <div className="bg-card rounded-xl border border-border overflow-hidden">
+              <div className="flex items-center justify-between px-4 py-3 border-b border-border">
+                <h2 className="flex items-center gap-2 font-semibold text-foreground">
+                  <TrendingUp size={16} className="text-muted-foreground" />
                   {t('dashboard.topProductsToday')}
                 </h2>
                 <Link href="/products" className="flex items-center gap-1 text-xs text-brand hover:text-brand-hover font-medium">
@@ -361,16 +378,16 @@ export default function DashboardPage() {
                 </Link>
               </div>
               {topProducts.length === 0 ? (
-                <p className="px-4 py-6 text-sm text-gray-400 text-center">{t('dashboard.noSalesYet')}</p>
+                <p className="px-4 py-6 text-sm text-muted-foreground text-center">{t('dashboard.noSalesYet')}</p>
               ) : (
-                <div className="divide-y divide-gray-50">
+                <div className="divide-y divide-border">
                   {topProducts.map((product) => (
                     <div key={product.product_id} className="flex items-center justify-between px-4 py-2.5">
                       <div className="min-w-0">
-                        <span className="text-sm font-medium text-gray-900">{product.product_name}</span>
-                        <p className="text-xs text-gray-400">{localizeTemplate(t('dashboard.productSoldOrders'), { quantity: product.total_quantity, orders: product.order_count })}</p>
+                        <span className="text-sm font-medium text-foreground">{product.product_name}</span>
+                        <p className="text-xs text-muted-foreground">{soldLabel(product.total_units, product.total_kg, product.order_count)}</p>
                       </div>
-                      <span className="text-sm font-semibold text-gray-900 shrink-0">
+                      <span className="text-sm font-semibold text-foreground shrink-0">
                         {fmt(Number(product.total_revenue))}
                       </span>
                     </div>
@@ -381,55 +398,30 @@ export default function DashboardPage() {
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mt-4">
-            {/* Top Staff */}
-            <div className="bg-white rounded-xl border border-gray-100 overflow-hidden">
-              <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
-                <h2 className="flex items-center gap-2 font-semibold text-gray-900">
-                  <Trophy size={16} className="text-gray-400" />
-                  {t('dashboard.topStaff')}
-                </h2>
-                <Link href="/staff" className="flex items-center gap-1 text-xs text-brand hover:text-brand-hover font-medium">
-                  {t('dashboard.viewAll')} <ArrowRight size={12} />
-                </Link>
-              </div>
-              {(insights?.topStaff.length ?? 0) === 0 ? (
-                <p className="px-4 py-6 text-sm text-gray-400 text-center">{t('dashboard.noSalesYet')}</p>
-              ) : (
-                <div className="divide-y divide-gray-50">
-                  {insights!.topStaff.map((staff) => (
-                    <div key={staff.user_id} className="flex items-center justify-between px-4 py-2.5">
-                      <div className="min-w-0">
-                        <span className="text-sm font-medium text-gray-900">{staff.name}</span>
-                        <p className="text-xs text-gray-400">{localizeTemplate(t('dashboard.staffOrderCount'), { orders: staff.orderCount })}</p>
-                      </div>
-                      <span className="text-sm font-semibold text-gray-900 shrink-0">
-                        {fmt(Number(staff.revenue))}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-
+            {/* The "top staff" card is gone with the Staff screen: a shop run
+                from one account ranks one person against nobody, and its
+                "view all" link pointed at a page that is no longer reachable.
+                Payment methods took the seat it left, so this stays a pair —
+                one card in a two-column grid left half the page blank. */}
             {/* Top Categories */}
-            <div className="bg-white rounded-xl border border-gray-100 overflow-hidden">
-              <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
-                <h2 className="flex items-center gap-2 font-semibold text-gray-900">
-                  <Tags size={16} className="text-gray-400" />
+            <div className="bg-card rounded-xl border border-border overflow-hidden">
+              <div className="flex items-center justify-between px-4 py-3 border-b border-border">
+                <h2 className="flex items-center gap-2 font-semibold text-foreground">
+                  <Tags size={16} className="text-muted-foreground" />
                   {t('dashboard.topCategories')}
                 </h2>
               </div>
               {(insights?.topCategories.length ?? 0) === 0 ? (
-                <p className="px-4 py-6 text-sm text-gray-400 text-center">{t('dashboard.noSalesYet')}</p>
+                <p className="px-4 py-6 text-sm text-muted-foreground text-center">{t('dashboard.noSalesYet')}</p>
               ) : (
-                <div className="divide-y divide-gray-50">
+                <div className="divide-y divide-border">
                   {insights!.topCategories.map((category) => (
                     <div key={category.category_id ?? category.name} className="flex items-center justify-between px-4 py-2.5">
                       <div className="min-w-0">
-                        <span className="text-sm font-medium text-gray-900">{category.name}</span>
-                        <p className="text-xs text-gray-400">{localizeTemplate(t('dashboard.categoryQuantitySold'), { quantity: category.quantity })}</p>
+                        <span className="text-sm font-medium text-foreground">{category.name}</span>
+                        <p className="text-xs text-muted-foreground">{localizeTemplate(t('dashboard.categoryQuantitySold'), { quantity: category.quantity })}</p>
                       </div>
-                      <span className="text-sm font-semibold text-gray-900 shrink-0">
+                      <span className="text-sm font-semibold text-foreground shrink-0">
                         {fmt(Number(category.revenue))}
                       </span>
                     </div>
@@ -437,91 +429,91 @@ export default function DashboardPage() {
                 </div>
               )}
             </div>
-          </div>
 
-          {/* Payment Methods */}
-          <div className="bg-white rounded-xl border border-gray-100 p-4 mt-4">
-            <div className="flex items-center gap-2 mb-4">
-              <Wallet size={16} className="text-gray-400" />
-              <h2 className="font-semibold text-gray-900">{t('dashboard.paymentMethods')}</h2>
-            </div>
-            {paymentMethods.length === 0 ? (
-              <p className="text-sm text-gray-400 text-center py-6">{t('dashboard.noPaymentsYet')}</p>
-            ) : (
-              <div className="space-y-3">
-                {paymentMethods.map((pm) => {
-                  const meta = PAYMENT_METHODS.find((m) => m.key === pm.method);
-                  const Icon = meta?.icon ?? Wallet;
-                  const label = meta ? t(meta.labelKey) : t('pos.methodWallet');
-                  const percent = paymentMethodsTotal > 0 ? Math.round((Number(pm.total) / paymentMethodsTotal) * 100) : 0;
-                  return (
-                    <div key={pm.method ?? 'unknown'}>
-                      <div className="flex items-center justify-between mb-1">
-                        <div className="flex items-center gap-2">
-                          <Icon size={14} className="text-gray-400" />
-                          <span className="text-sm font-medium text-gray-900">{label}</span>
-                        </div>
-                        <span className="text-sm font-semibold text-gray-900">{fmt(Number(pm.total))}</span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <div className="flex-1 h-1.5 bg-gray-100 rounded-full overflow-hidden">
-                          <div className="h-full bg-brand rounded-full" style={{ width: `${percent}%` }} />
-                        </div>
-                        <span className="text-xs text-gray-400 shrink-0">
-                          {localizeTemplate(t('dashboard.paymentMethodCount'), { count: pm.count, percent })}
-                        </span>
-                      </div>
-                    </div>
-                  );
-                })}
+            {/* Payment Methods */}
+            <div className="bg-card rounded-xl border border-border p-4">
+              <div className="flex items-center gap-2 mb-4">
+                <Wallet size={16} className="text-muted-foreground" />
+                <h2 className="font-semibold text-foreground">{t('dashboard.paymentMethods')}</h2>
               </div>
-            )}
+              {paymentMethods.length === 0 ? (
+                <p className="text-sm text-muted-foreground text-center py-6">{t('dashboard.noPaymentsYet')}</p>
+              ) : (
+                <div className="space-y-3">
+                  {paymentMethods.map((pm) => {
+                    const meta = PAYMENT_METHOD_LABELS.find((m) => m.key === pm.method);
+                    const Icon = meta?.icon ?? Wallet;
+                    const label = meta ? t(meta.labelKey) : t('pos.methodWallet');
+                    const percent = paymentMethodsTotal > 0 ? Math.round((Number(pm.total) / paymentMethodsTotal) * 100) : 0;
+                    return (
+                      <div key={pm.method ?? 'unknown'}>
+                        <div className="flex items-center justify-between mb-1">
+                          <div className="flex items-center gap-2">
+                            <Icon size={14} className="text-muted-foreground" />
+                            <span className="text-sm font-medium text-foreground">{label}</span>
+                          </div>
+                          <span className="text-sm font-semibold text-foreground">{fmt(Number(pm.total))}</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <div className="flex-1 h-1.5 bg-muted rounded-full overflow-hidden">
+                            <div className="h-full bg-brand rounded-full" style={{ width: `${percent}%` }} />
+                          </div>
+                          <span className="text-xs text-muted-foreground shrink-0">
+                            {localizeTemplate(t('dashboard.paymentMethodCount'), { count: pm.count, percent })}
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
           </div>
 
           {/* Business Patterns */}
-          <div className="bg-white rounded-xl border border-gray-100 p-4 mt-4">
+          <div className="bg-card rounded-xl border border-border p-4 mt-4">
             <div className="flex items-center gap-2 mb-1">
-              <BarChart3 size={16} className="text-gray-400" />
-              <h2 className="font-semibold text-gray-900">{t('dashboard.businessPatterns')}</h2>
+              <BarChart3 size={16} className="text-muted-foreground" />
+              <h2 className="font-semibold text-foreground">{t('dashboard.businessPatterns')}</h2>
             </div>
-            <p className="text-xs text-gray-400 mb-4">
+            <p className="text-xs text-muted-foreground mb-4">
               {localizeTemplate(t('dashboard.businessPatternsHint'), { days: insights?.windowDays ?? 30 })}
             </p>
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
               <div>
-                <p className="text-xs text-gray-500 mb-1">{t('dashboard.busiestHour')}</p>
-                <p className="text-lg font-bold text-gray-900">
+                <p className="text-xs text-muted-foreground mb-1">{t('dashboard.busiestHour')}</p>
+                <p className="text-lg font-bold text-foreground">
                   {insights?.busiestHour ? formatHourLabel(insights.busiestHour.hour, locale) : t('dashboard.notEnoughData')}
                 </p>
                 {insights?.busiestHour && (
-                  <p className="text-xs text-gray-400">{localizeTemplate(t('dashboard.ordersCount'), { count: insights.busiestHour.orderCount })}</p>
+                  <p className="text-xs text-muted-foreground">{localizeTemplate(t('dashboard.ordersCount'), { count: insights.busiestHour.orderCount })}</p>
                 )}
               </div>
               <div>
-                <p className="text-xs text-gray-500 mb-1">{t('dashboard.idlestHour')}</p>
-                <p className="text-lg font-bold text-gray-900">
+                <p className="text-xs text-muted-foreground mb-1">{t('dashboard.idlestHour')}</p>
+                <p className="text-lg font-bold text-foreground">
                   {insights?.idlestHour ? formatHourLabel(insights.idlestHour.hour, locale) : t('dashboard.notEnoughData')}
                 </p>
                 {insights?.idlestHour && (
-                  <p className="text-xs text-gray-400">{localizeTemplate(t('dashboard.ordersCount'), { count: insights.idlestHour.orderCount })}</p>
+                  <p className="text-xs text-muted-foreground">{localizeTemplate(t('dashboard.ordersCount'), { count: insights.idlestHour.orderCount })}</p>
                 )}
               </div>
               <div>
-                <p className="text-xs text-gray-500 mb-1">{t('dashboard.busiestDay')}</p>
-                <p className="text-lg font-bold text-gray-900">
+                <p className="text-xs text-muted-foreground mb-1">{t('dashboard.busiestDay')}</p>
+                <p className="text-lg font-bold text-foreground">
                   {insights?.busiestDayOfWeek ? formatWeekdayLabel(insights.busiestDayOfWeek.dayIndex, locale) : t('dashboard.notEnoughData')}
                 </p>
                 {insights?.busiestDayOfWeek && (
-                  <p className="text-xs text-gray-400">{localizeTemplate(t('dashboard.ordersCount'), { count: insights.busiestDayOfWeek.orderCount })}</p>
+                  <p className="text-xs text-muted-foreground">{localizeTemplate(t('dashboard.ordersCount'), { count: insights.busiestDayOfWeek.orderCount })}</p>
                 )}
               </div>
               <div>
-                <p className="text-xs text-gray-500 mb-1">{t('dashboard.idlestDay')}</p>
-                <p className="text-lg font-bold text-gray-900">
+                <p className="text-xs text-muted-foreground mb-1">{t('dashboard.idlestDay')}</p>
+                <p className="text-lg font-bold text-foreground">
                   {insights?.idlestDayOfWeek ? formatWeekdayLabel(insights.idlestDayOfWeek.dayIndex, locale) : t('dashboard.notEnoughData')}
                 </p>
                 {insights?.idlestDayOfWeek && (
-                  <p className="text-xs text-gray-400">{localizeTemplate(t('dashboard.ordersCount'), { count: insights.idlestDayOfWeek.orderCount })}</p>
+                  <p className="text-xs text-muted-foreground">{localizeTemplate(t('dashboard.ordersCount'), { count: insights.idlestDayOfWeek.orderCount })}</p>
                 )}
               </div>
             </div>

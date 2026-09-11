@@ -8,6 +8,17 @@ if [ "$#" -eq 0 ]; then
   exit 2
 fi
 
+# Keep the tests off the ports a running application uses.
+#
+# On the default 3001 a development app already listening keeps the port; the
+# test server quietly falls back to 3002, 3003… while the test still addresses
+# 3001 — and reaches the live application instead of its own. It then fails as
+# a rejected password rather than a port clash, and its repeated login attempts
+# trip the real till's rate limiter, locking the cashier out for fifteen
+# minutes. Both are overridable for a machine where these ports are also busy.
+export PORT="${PORT:-3901}"
+export KDS_PORT="${KDS_PORT:-3911}"
+
 "$@"
 exit_code=$?
 

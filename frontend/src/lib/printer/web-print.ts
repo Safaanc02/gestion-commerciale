@@ -13,7 +13,7 @@ import { getCountryByCode, getCurrencySymbol } from '@/lib/countries';
 import { formatDate } from './format-date';
 import { formatTaxComponentLabel, resolveTaxComponents } from './tax-components';
 
-export type PaperSize = 'thermal58' | 'thermal80';
+export type PaperSize = 'thermal58' | 'thermal80' | 'a5';
 
 /** Encodes HTML entity characters so database-sourced values can't inject markup/scripts into the bill print window. */
 function escapeHtml(value: unknown): string {
@@ -87,8 +87,6 @@ export function generateBillHtml(
 
   const styles = getPaperStyles(paperSize);
   const taxComponents = resolveTaxComponents(bill);
-  const hasTax = Number(bill.tax_amount) !== 0
-    || taxComponents.some((component) => Number(component.amount) !== 0);
 
   const items = order?.items ?? [];
 
@@ -114,7 +112,11 @@ export function generateBillHtml(
       ${displayName ? `<h1>${escapeHtml(displayName)}</h1>` : ''}
       ${address ? `<p>${escapeHtml(address).replace(/\n/g, '<br>')}</p>` : ''}
       ${phone ? `<p>Ph: ${escapeHtml(phone)}</p>` : ''}
-      ${hasTax && taxRegistrationNumber ? `<p>${escapeHtml(taxIdLabel)}: ${escapeHtml(taxRegistrationNumber)}</p>` : ''}
+      <!-- Shown because the shop asked for it, not because tax happened to be
+           charged. In Morocco the ICE identifies the business on the document
+           whether or not VAT appears on that particular sale; gating it on tax
+           meant a shop that ticked "show tax ID" never saw one. -->
+      ${includeTaxId && taxRegistrationNumber ? `<p>${escapeHtml(taxIdLabel)}: ${escapeHtml(taxRegistrationNumber)}</p>` : ''}
     </div>
 
     <!-- Bill Details -->
@@ -248,6 +250,28 @@ function getPaperStyles(size: PaperSize): string {
       return baseStyles + `
         .bill-container { padding: 10px; max-width: 80mm; font-size: 11px; }
         .header h1 { font-size: 16px; }
+      `;
+    case 'a5':
+      // A sheet, not a roll. @page fixes the size so the driver does not fall
+      // back to A4 and print a receipt in the top third of a blank page.
+      //
+      // Arabic needs nothing special here: this is HTML going to the Windows
+      // driver, so the system font shapes the letters and lays them out
+      // right-to-left by itself. The code-page work the thermal printer needs
+      // simply does not apply on this path.
+      return baseStyles + `
+        @page { size: A5; margin: 10mm; }
+        .bill-container { width: 100%; font-size: 12px; }
+        .header h1 { font-size: 20px; }
+        .items-table th, .items-table td { padding: 5px 6px; }
+        .items-table th { background: #f0f0f0; }
+        /* A basket runs past one sheet: keep a row whole and repeat the
+           header on the next page rather than splitting a line in half. */
+        .items-table { page-break-inside: auto; }
+        .items-table tr { page-break-inside: avoid; page-break-after: auto; }
+        .items-table thead { display: table-header-group; }
+        .totals-table, .tax-table, .payments-table { page-break-inside: avoid; }
+        .footer { margin-top: 18px; }
       `;
     default:
       return baseStyles;

@@ -28,7 +28,7 @@ npm run test:url-allowlist
 npm run audit:db
 ```
 
-`npm run build:linux` produces AppImage, `.deb`, `.rpm`, and Snap packages. `npm run build:appx` produces the Windows Store AppX package; it passes `--config.npmRebuild=false` to skip native recompilation because `better-sqlite3` uses N-API (ABI-stable) and does not need to be rebuilt per Electron version. If a non-N-API native module is ever added, remove that flag and ensure a Visual Studio C++ toolchain is available in the build environment. `npm run dev:restart` and `npm run dev:reset` are Unix development recovery commands; reset requires confirmation.
+`npm run build:linux` produces AppImage, `.deb`, `.rpm`, and Snap packages. `npm run build:win` produces the NSIS installer and `npm run build:appx` the Windows Store AppX package; both pass `--config.npmRebuild=false`. This is what makes a Windows build possible from macOS at all: `better-sqlite3` v13 ships a prebuilt binary for every platform inside the package (`prebuilds/win32-x64.node`), selected at runtime, so nothing needs compiling — while letting electron-builder rebuild instead sends it to node-gyp, which cannot cross-compile and fails the build outright. If a non-N-API native module is ever added, remove that flag and ensure a Visual Studio C++ toolchain is available in the build environment. `npm run dev:restart` and `npm run dev:reset` are Unix development recovery commands; reset requires confirmation.
 
 ## Data safety
 

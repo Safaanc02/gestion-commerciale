@@ -4,11 +4,13 @@ import { useState, useEffect, useRef } from 'react';
 import api from '@/lib/api';
 import { useAuthStore } from '@/store/auth';
 import { useCartStore } from '@/store/cart';
+import { useScanToCart } from '@/hooks/useScanToCart';
 import { useHeldOrdersStore } from '@/store/held-orders';
 import { usePosSettingsStore } from '@/store/pos-settings';
+import { printWebBill } from '@/lib/printer/web-print';
 import { useSidebar } from '@/components/ui/sidebar';
 import toast from 'react-hot-toast';
-import { ShoppingCart, X } from 'lucide-react';
+import { ShoppingCart, X, Info } from 'lucide-react';
 import type { Addon, Category, Product, Table, Bill, Order, CartItem } from '@/lib/types';
 import { useConfirm } from '@/hooks/use-confirm';
 import {
@@ -17,7 +19,14 @@ import {
 
 import ProductGrid from '@/components/pos/ProductGrid';
 import CartPanel from '@/components/pos/CartPanel';
+import CartTable from '@/components/pos/CartTable';
+import CategoryPad from '@/components/pos/CategoryPad';
+import RegisterActions from '@/components/pos/RegisterActions';
+import RegisterTotals from '@/components/pos/RegisterTotals';
+import UnknownBarcodeModal from '@/components/pos/UnknownBarcodeModal';
 import AddonModal from '@/components/pos/AddonModal';
+import { WeightPad } from '@/components/pos/WeightPad';
+import { ItemPad } from '@/components/pos/ItemPad';
 import CustomerSearch from '@/components/pos/CustomerSearch';
 import TablePickerModal from '@/components/pos/TablePickerModal';
 import TableCheckoutModal from '@/components/pos/TableCheckoutModal';
@@ -57,9 +66,18 @@ interface PrepaidAttempt {
 export default function POSPage() {
   const { currentTenant, user } = useAuthStore();
   const isRestaurant = (currentTenant?.business_type ?? 'restaurant') === 'restaurant';
+
+  // A shop that does not seat anyone and does not deliver has one order type.
+  // Set as the store's default rather than once on mount, because clearCart
+  // runs after every sale — otherwise the second ticket of the day, and every
+  // one after it, would be recorded as eaten in.
+  const setDefaultOrderType = useCartStore((s) => s.setDefaultOrderType);
+  const wantedOrderType = isRestaurant ? 'dine_in' : 'takeaway';
+  useEffect(() => { setDefaultOrderType(wantedOrderType); }, [wantedOrderType, setDefaultOrderType]);
   const cart = useCartStore();
   const heldOrders = useHeldOrdersStore();
-  const { customerMandatory, autoPrintKot, autoPrintBill, billingType, tablesRequired, kotPrintingEnabled, setBillingType, setTablesRequired, setKotPrintingEnabled } = usePosSettingsStore();
+  const { customerMandatory, autoPrintKot, autoPrintBill, billingType, tablesRequired, kotPrintingEnabled, setBillingType, setTablesRequired, setKotPrintingEnabled,
+    printerPaperSize, billAddress, billPhone, billTaxRegistrationNumber, billShowTaxId, billFooterMessage } = usePosSettingsStore();
   const { open: leftSidebarOpen } = useSidebar();
   const { t } = useI18n();
   const currencyFmt = useFormatCurrency();
@@ -71,11 +89,43 @@ export default function POSPage() {
   const [selectedCategory, setSelectedCategory] = useState<number | null>(null);
   const [search, setSearch] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  // Until the business settings land we do not know whether confirming takes
+  // the money now or records an unpaid order. Confirming is held until then.
+  const [settingsLoaded, setSettingsLoaded] = useState(false);
+  const [settingsError, setSettingsError] = useState(false);
+
+  /**
+   * Re-read the one setting that decides how a sale is taken.
+   *
+   * Holding the confirm button until the billing mode is known is right, but
+   * on its own it leaves a till that cannot sell at all if the request failed
+   * once. This is the way back — offered in the open, next to the button it
+   * unblocks, rather than behind a reload of the whole application.
+   */
+  const loadBillingSettings = async () => {
+    try {
+      const { data } = await api.get('/settings/business');
+      setBillingType(data.billing_type === 'prepaid' ? 'prepaid' : 'postpaid');
+      setTablesRequired(typeof data.tables_required === 'boolean' ? data.tables_required : true);
+      setSettingsLoaded(true);
+      setSettingsError(false);
+    } catch {
+      setSettingsError(true);
+    }
+  };
   const [mobileCartOpen, setMobileCartOpen] = useState(false);
+  // Which basket line the action column acts on.
+  const [selectedLineId, setSelectedLineId] = useState<string | null>(null);
 
   // Modal state
   const [showTablePicker, setShowTablePicker] = useState(false);
   const [addonProduct, setAddonProduct] = useState<Product | null>(null);
+  // Weighed goods: the keypad replaces the add-on modal entirely.
+  const [weighProduct, setWeighProduct] = useState<Product | null>(null);
+  // A scanned code that matches nothing — offered for quick creation.
+  const [unknownBarcode, setUnknownBarcode] = useState<string | null>(null);
+  // Tapping a countable product opens the quantity/price pad.
+  const [itemPadProduct, setItemPadProduct] = useState<Product | null>(null);
   const [editingCartItem, setEditingCartItem] = useState<CartItem | null>(null);
   const [checkoutTable, setCheckoutTable] = useState<Table | null>(null);
   const [paymentBill, setPaymentBill] = useState<Bill | null>(null);
@@ -210,6 +260,27 @@ export default function POSPage() {
     if (!currentTenant) return;
     if (!force && !autoPrintBill) return;
 
+    // An A5 sheet is not a thermal roll and does not go through the ESC/POS
+    // path at all: it is laid out as a page and handed to the Windows printer
+    // driver. Arabic needs no code page here — the system font shapes it.
+    if (printerPaperSize === 'a5') {
+      printWebBill(
+        bill,
+        { business_name: currentTenant.business_name, currency, country: currentTenant.country },
+        {
+          paperSize: 'a5',
+          businessName: currentTenant.business_name,
+          address: billAddress,
+          phone: billPhone,
+          taxRegistrationNumber: billTaxRegistrationNumber,
+          includeTaxId: billShowTaxId,
+          footerNote: billFooterMessage,
+          isReprint: !force,
+        },
+      );
+      return;
+    }
+
     try {
       const printWarnings = await printBill(bill, {
         business_name: currentTenant.business_name,
@@ -245,6 +316,7 @@ export default function POSPage() {
         const settingsRes = await api.get('/settings/business');
         const d = settingsRes.data;
         setBillingType(d.billing_type === 'prepaid' ? 'prepaid' : 'postpaid');
+        setSettingsLoaded(true);
         const isTablesRequired = typeof d.tables_required === 'boolean' ? d.tables_required : true;
         setTablesRequired(isTablesRequired);
 
@@ -277,6 +349,7 @@ export default function POSPage() {
           await heldOrders.fetchHeldOrders();
         }
       } catch {
+        setSettingsError(true);
         toast.error(t('pos.menuLoadFailed'));
       }
     };
@@ -285,12 +358,33 @@ export default function POSPage() {
   }, [isRestaurant, setBillingType, setTablesRequired, setKotPrintingEnabled]);
 
   const handleProductClick = (product: Product) => {
-    // Always open modal so user can add notes and adjust quantity
-    setAddonProduct(product);
+    // Sold by weight: there is no sensible "1" to add, so ask for the weight.
+    if (product.unit_of_measure === 'kg') {
+      setWeighProduct(product);
+      return;
+    }
+    // Only stop for a modal when there is actually something to choose. In a
+    // supermarket most taps are a plain item and a forced modal is pure
+    // friction; restaurant products with option groups still open it.
+    if (product.addon_groups && product.addon_groups.length > 0) {
+      setAddonProduct(product);
+      return;
+    }
+    setItemPadProduct(product);
+  };
+
+  const handleItemPadConfirm = (product: Product, quantity: number, unitPrice: number | null) => {
+    cart.addItem(product, quantity, [], '', unitPrice != null ? { unit_price: unitPrice } : undefined);
+    setItemPadProduct(null);
   };
 
   const handleAddonAdd = (product: Product, quantity: number, addons: Addon[], instructions: string) => {
     cart.addItem(product, quantity, addons, instructions);
+  };
+
+  const handleWeighConfirm = (product: Product, quantityKg: number) => {
+    cart.addItem(product, quantityKg, [], '', { quantity_source: 'manual_weight' });
+    setWeighProduct(null);
   };
 
   const handleEditItemSave = (_product: Product, quantity: number, addons: Addon[], instructions: string) => {
@@ -301,16 +395,18 @@ export default function POSPage() {
   // A modal already open means the scan (if one lands) isn't meant for the
   // product grid — e.g. it could be a barcode field inside that modal.
   const anyModalOpen = showTablePicker || !!addonProduct || !!editingCartItem || !!checkoutTable
-    || !!paymentBill || showCustomerPrompt || showPrepaidCheckout;
+    || !!paymentBill || showCustomerPrompt || showPrepaidCheckout || !!weighProduct || !!itemPadProduct || !!unknownBarcode;
 
-  useBarcodeScanner((code) => {
-    const product = products.find((p) => p.barcode === code);
-    if (product) {
-      handleProductClick(product);
-    } else {
-      toast.error(t('pos.barcodeNotFound', { code }));
-    }
-  }, !anyModalOpen);
+  // Shared with the dashboard quick-sell panel — see useScanToCart.
+  // A scan and a tap land in the same place: the keypad, so a price that has
+  // changed can be keyed before the line is added. Scanning does not skip it.
+  //
+  // The pad keeps the scanner alive itself while it is open (see ItemPad's
+  // onScan) — otherwise the second of two consecutive scans went nowhere at
+  // all, silently, because opening a modal takes the listener off this page.
+  const handleScan = useScanToCart({ products, onProduct: handleProductClick, onUnknown: setUnknownBarcode });
+
+  useBarcodeScanner((code) => { void handleScan(code); }, !anyModalOpen);
 
   const handlePlaceOrder = async () => {
     if (cart.items.length === 0) {
@@ -346,6 +442,11 @@ export default function POSPage() {
             ? item.addons.map((a) => ({ id: a.id, name: a.name, price: a.price, quantity: a.quantity || 1 }))
             : null,
           special_instructions: item.special_instructions || null,
+          // The raw label, when there was one. The server re-decodes it and
+          // recomputes the weight and the amount from its own catalogue — the
+          // quantity above is only what the till displayed.
+          scan_raw: item.scan_raw || null,
+      unit_price: item.unit_price ?? undefined,
         }));
         const itemFingerprint = JSON.stringify({ order_id: pendingOrder.id, items: newItems, special_instructions: cart.orderNotes || undefined });
         const priorItemsAttempt = readPostpaidAttempt();
@@ -376,6 +477,8 @@ export default function POSPage() {
               ? item.addons.map((a) => ({ id: a.id, name: a.name, price: a.price, quantity: a.quantity || 1 }))
               : null,
             special_instructions: item.special_instructions || null,
+            scan_raw: item.scan_raw || null,
+      unit_price: item.unit_price ?? undefined,
           })),
         };
         const orderFingerprint = JSON.stringify(orderPayload);
@@ -419,6 +522,8 @@ export default function POSPage() {
         ? item.addons.map((a) => ({ id: a.id, name: a.name, price: a.price, quantity: a.quantity || 1 }))
         : null,
       special_instructions: item.special_instructions || null,
+      scan_raw: item.scan_raw || null,
+      unit_price: item.unit_price ?? undefined,
     }));
     const paymentLines = payments
       .filter((p) => p.amount > 0)
@@ -667,7 +772,7 @@ export default function POSPage() {
     cart.setOrderType('dine_in');
     cart.setOrderNotes(order.special_instructions || '');
     setPendingOrder(order);
-    toast(`${t('pos.addingItemsToOrder', { number: order.order_number })} ${t('pos.placeOrderReady')}`, { icon: 'ℹ️' });
+    toast(`${t('pos.addingItemsToOrder', { number: order.order_number })} ${t('pos.placeOrderReady')}`, { icon: <Info size={18} className="text-brand" /> });
   };
 
   // Add cart items directly to existing order
@@ -691,6 +796,8 @@ export default function POSPage() {
             ? item.addons.map((a) => ({ id: a.id, name: a.name, price: a.price, quantity: a.quantity || 1 }))
             : null,
           special_instructions: item.special_instructions || null,
+          scan_raw: item.scan_raw || null,
+      unit_price: item.unit_price ?? undefined,
         })),
         special_instructions: order.special_instructions || undefined,
       }, { headers: { 'Idempotency-Key': idempotencyKey } });
@@ -737,17 +844,17 @@ export default function POSPage() {
   return (
     <>
       {supportError && (
-        <div className="fixed bottom-4 left-4 z-50 w-[min(28rem,calc(100vw-2rem))] rounded-xl border border-red-200 bg-white p-4 shadow-xl">
+        <div className="fixed bottom-4 start-4 z-50 w-[min(28rem,calc(100vw-2rem))] rounded-xl border border-red-200 bg-card p-4 shadow-xl">
           {sentTicketId ? (
             <>
               <p className="font-semibold text-red-800">{t('support.requestQueued')}</p>
               {delivery.status === 'delivered' && delivery.supportCode ? (
                 <>
-                  <p className="mt-1 text-sm font-semibold text-gray-800">{t('support.supportCode')}: <span className="font-mono">{delivery.supportCode}</span></p>
-                  <p className="mt-0.5 text-xs text-gray-500">{t('support.supportCodeHint')}</p>
+                  <p className="mt-1 text-sm font-semibold text-foreground">{t('support.supportCode')}: <span className="font-mono">{delivery.supportCode}</span></p>
+                  <p className="mt-0.5 text-xs text-muted-foreground">{t('support.supportCodeHint')}</p>
                 </>
               ) : (
-                <p className="mt-1 text-xs text-gray-500">
+                <p className="mt-1 text-xs text-muted-foreground">
                   {delivery.status === 'failed' ? t('support.stillQueuedLocally') : t('support.confirmingDelivery')}
                 </p>
               )}
@@ -758,10 +865,10 @@ export default function POSPage() {
           ) : (
             <>
               <p className="font-semibold text-red-800">Printing failed</p>
-              <p className="mt-1 text-sm text-gray-600">{supportError.message}</p>
-              <details className="mt-2 text-xs text-gray-500">
+              <p className="mt-1 text-sm text-muted-foreground">{supportError.message}</p>
+              <details className="mt-2 text-xs text-muted-foreground">
                 <summary className="cursor-pointer">{t('support.showPayload')}</summary>
-                <pre className="mt-2 max-h-32 overflow-auto rounded bg-gray-50 p-2">{JSON.stringify(
+                <pre className="mt-2 max-h-32 overflow-auto rounded bg-muted/50 p-2">{JSON.stringify(
                   diagnosticsPreview
                     ? { ...supportError.payload, diagnostics: { ...(supportError.payload.diagnostics as Record<string, unknown> | undefined), ...diagnosticsPreview } }
                     : supportError.payload,
@@ -795,36 +902,114 @@ export default function POSPage() {
       )}
       <PosTopbar tables={tables} onShowTablePicker={() => setShowTablePicker(true)} />
 
-      {/* Main content area */}
-      <div className="flex flex-1 min-h-0 overflow-hidden p-4 gap-4">
-        {/* Product Grid — full width on mobile, flex-1 on desktop */}
-        <div className="flex-1 min-w-0 h-full flex flex-col">
-          <ProductGrid
-            categories={categories}
-            products={products}
-            selectedCategory={selectedCategory}
-            setSelectedCategory={setSelectedCategory}
-            search={search}
-            setSearch={setSearch}
-            currency={currency}
-            onProductClick={handleProductClick}
-            sidebarOpen={leftSidebarOpen}
-          />
+      {/*
+        The register, laid out like the till this shop already runs: basket and
+        shelves on top, products underneath, actions in a fixed column at the
+        edge. Nothing is behind a menu, so a cashier reaches for a position on
+        the screen instead of reading their way to it.
+
+        Sides are logical, not physical. In Arabic the shelves sit at the
+        reading start (right) and the action column at the end (left), which is
+        where they are on the machine being replaced; in French the whole thing
+        mirrors without a second layout.
+      */}
+      {settingsError && !settingsLoaded && (
+        <div className="mx-3 mt-2 flex items-center justify-between gap-3 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+          <span>{t('pos.settingsUnavailable')}</span>
+          <button
+            onClick={loadBillingSettings}
+            className="shrink-0 rounded-md bg-amber-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-amber-700"
+          >
+            {t('common.retry')}
+          </button>
+        </div>
+      )}
+
+      <div className="hidden md:flex flex-1 min-h-0 overflow-hidden p-3 gap-3">
+        <div className="flex min-h-0 flex-1 min-w-0 flex-col gap-2">
+          <RegisterTotals itemCount={itemCount} />
+          <div className="flex min-h-0 flex-[2] gap-2">
+            <div className="min-w-0 flex-1">
+              <CartTable
+                items={cart.items}
+                selectedId={selectedLineId}
+                onSelect={setSelectedLineId}
+                onOpenLine={setEditingCartItem}
+              />
+            </div>
+            <div className="w-56 shrink-0">
+              <CategoryPad
+                categories={categories}
+                selected={selectedCategory}
+                onSelect={setSelectedCategory}
+              />
+            </div>
+          </div>
+
+          <div className="flex min-h-0 flex-[3] flex-col">
+            <ProductGrid
+              categories={categories}
+              products={products}
+              selectedCategory={selectedCategory}
+              setSelectedCategory={setSelectedCategory}
+              search={search}
+              setSearch={setSearch}
+              currency={currency}
+              onProductClick={handleProductClick}
+              onScan={handleScan}
+              sidebarOpen={leftSidebarOpen}
+              hideCategoryBar
+            />
+          </div>
         </div>
 
-        {/* Desktop Cart — always open, hidden on mobile */}
-        <div className="hidden md:flex md:w-80 md:shrink-0 h-full">
-          <CartPanel {...cartPanelProps} />
-        </div>
+        <RegisterActions
+          onConfirm={handlePlaceOrder}
+          onQuantity={() => {
+            const line = cart.items.find((i) => i.id === selectedLineId);
+            if (line) setEditingCartItem(line);
+          }}
+          onRemoveLine={() => {
+            if (selectedLineId) { cart.removeItem(selectedLineId); setSelectedLineId(null); }
+          }}
+          onCancelTicket={async () => {
+            if (await confirm(t('pos.cancelTicketConfirm'))) {
+              cart.clearCart();
+              setSelectedLineId(null);
+            }
+          }}
+          canConfirm={cart.items.length > 0 && settingsLoaded}
+          hasSelection={!!selectedLineId && cart.items.some((i) => i.id === selectedLineId)}
+          hasItems={cart.items.length > 0}
+          submitting={submitting}
+        />
+      </div>
+
+      {/* Below the register's width the columns cannot coexist: the grid takes
+          the screen and the basket moves into the sheet reached from the
+          floating button. */}
+      <div className="flex flex-1 min-h-0 overflow-hidden p-3 md:hidden">
+        <ProductGrid
+          categories={categories}
+          products={products}
+          selectedCategory={selectedCategory}
+          setSelectedCategory={setSelectedCategory}
+          search={search}
+          setSearch={setSearch}
+          currency={currency}
+          onProductClick={handleProductClick}
+          onScan={handleScan}
+          sidebarOpen={leftSidebarOpen}
+        />
       </div>
 
       {/* Mobile: Floating Cart Button + Bottom Sheet — outside flex container */}
       <Drawer open={mobileCartOpen} onOpenChange={setMobileCartOpen}>
         <DrawerTrigger asChild>
-          <button className="fixed bottom-5 right-5 z-40 w-14 h-14 bg-brand text-white rounded-full shadow-lg flex items-center justify-center hover:bg-brand-hover transition-colors md:hidden">
+          <button className="fixed bottom-5 end-5 z-40 w-14 h-14 bg-brand text-white rounded-full shadow-lg flex items-center justify-center hover:bg-brand-hover transition-colors md:hidden">
             <ShoppingCart size={22} />
             {itemCount > 0 && (
-              <span className="absolute -top-0.5 -right-0.5 bg-red-500 text-white text-xs w-5 h-5 rounded-full flex items-center justify-center font-bold">
+              <span className="absolute -top-0.5 -end-0.5 bg-red-500 text-white text-xs w-5 h-5 rounded-full flex items-center justify-center font-bold">
                 {itemCount}
               </span>
             )}
@@ -860,7 +1045,38 @@ export default function POSPage() {
         />
       )}
 
-      {editingCartItem && (
+      {itemPadProduct && (
+        <ItemPad
+          product={itemPadProduct}
+          onConfirm={handleItemPadConfirm}
+          onScan={handleScan}
+          onClose={() => setItemPadProduct(null)}
+        />
+      )}
+
+      {weighProduct && (
+        <WeightPad
+          product={weighProduct}
+          onConfirm={handleWeighConfirm}
+          onClose={() => setWeighProduct(null)}
+        />
+      )}
+
+      {editingCartItem && editingCartItem.unit_of_measure === 'kg' && (
+        // Correcting a mis-keyed weight goes back through the keypad, not the
+        // add-on stepper: the stepper only moves in whole units.
+        <WeightPad
+          product={editingCartItem.product}
+          initialGrams={Math.round(editingCartItem.quantity * 1000)}
+          onConfirm={(_product, quantityKg) => {
+            cart.updateItemDetails(editingCartItem.id, quantityKg, editingCartItem.addons, editingCartItem.special_instructions);
+            setEditingCartItem(null);
+          }}
+          onClose={() => setEditingCartItem(null)}
+        />
+      )}
+
+      {editingCartItem && editingCartItem.unit_of_measure !== 'kg' && (
         <AddonModal
           product={editingCartItem.product}
           currency={currency}
@@ -897,14 +1113,14 @@ export default function POSPage() {
 
       {showCustomerPrompt && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl p-5 w-full max-w-sm">
+          <div className="bg-card rounded-2xl p-5 w-full max-w-sm">
             <div className="flex justify-between items-center mb-4">
               <h3 className="text-lg font-bold">{t('pos.selectCustomer')}</h3>
-              <button onClick={() => setShowCustomerPrompt(false)} className="text-gray-400 hover:text-gray-600">
+              <button onClick={() => setShowCustomerPrompt(false)} className="text-muted-foreground hover:text-muted-foreground">
                 <X size={20} />
               </button>
             </div>
-            <p className="text-sm text-gray-500 mb-4">{t('pos.customerRequiredBeforeOrder')}</p>
+            <p className="text-sm text-muted-foreground mb-4">{t('pos.customerRequiredBeforeOrder')}</p>
             <CustomerSearch onSelected={() => setShowCustomerPrompt(false)} />
           </div>
         </div>
@@ -913,6 +1129,21 @@ export default function POSPage() {
       {ConfirmDialog}
 
       {/* Prepaid Checkout Modal - Payment BEFORE order is placed */}
+      {unknownBarcode && (
+        <UnknownBarcodeModal
+          barcode={unknownBarcode}
+          categories={categories}
+          onClose={() => setUnknownBarcode(null)}
+          onCreated={(product) => {
+            // Into the catalogue on screen as well as the basket, so the next
+            // scan of the same code resolves without a page reload.
+            setProducts((prev) => [...prev, product]);
+            cart.addItem(product, 1, [], '');
+            setUnknownBarcode(null);
+          }}
+        />
+      )}
+
       {showPrepaidCheckout && (
         <PrepaidCheckoutModal
           currency={currency}

@@ -1,7 +1,8 @@
+import type { Language } from '@/lib/i18n';
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 
-export type PaperSize = 'thermal58' | 'thermal80';
+export type PaperSize = 'thermal58' | 'thermal80' | 'a5';
 export type PrinterPrintMode = 'escpos' | 'browser';
 export type BillTemplate = 'classic' | 'compact' | 'detailed';
 
@@ -17,7 +18,7 @@ export interface PosSettingsState {
   // UI language for i18n routing. Synced from tenant on auth load.
   // Initial value reads the browser locale; persist middleware overrides
   // on reload, so user choices persist across sessions.
-  language: 'en' | 'es' | 'pt';
+  language: Language;
   // Printer settings
   printerPaperSize: PaperSize;
   printerEnabled: boolean;
@@ -52,7 +53,7 @@ export interface PosSettingsState {
   setShowProductImages: (show: boolean) => void;
   setCustomerMandatory: (mandatory: boolean) => void;
   setEnforcePhoneLength: (enabled: boolean) => void;
-  setLanguage: (lang: 'en' | 'es' | 'pt') => void;
+  setLanguage: (lang: Language) => void;
   setPrinterPaperSize: (size: PaperSize) => void;
   setPrinterEnabled: (enabled: boolean) => void;
   setPrinterPrintMode: (mode: PrinterPrintMode) => void;
@@ -81,7 +82,13 @@ export interface PosSettingsState {
 export const usePosSettingsStore = create<PosSettingsState>()(
   persist(
     (set) => ({
-      showProductImages: true,
+      // Off by default. A grocery catalogue imported from an existing system
+      // has no photographs, so every tile fell back to a large randomly
+      // coloured square showing the first two characters of the name — which
+      // for "10 Capsules Aluminium…" reads "10", the same on every tile. It
+      // filled half the screen with noise and pushed the price out of view.
+      // A shop that does photograph its products turns this back on.
+      showProductImages: false,
       customerMandatory: false,
       enforcePhoneLength: false,
       billingType: 'postpaid',
@@ -146,12 +153,19 @@ export const usePosSettingsStore = create<PosSettingsState>()(
     }),
     {
       name: 'pos-settings',
-      // Don't persist whatsappEnabled — it's always synced from the
-      // backend (Sidebar fetches /whatsapp/status on mount, WhatsApp page
-      // updates on toggle). Stale persisted values would mask the real
-      // state for tenants who enable/disable across devices.
+      // Don't persist what the server owns.
+      //
+      // whatsappEnabled is always synced from the backend (Sidebar fetches
+      // /whatsapp/status on mount, WhatsApp page updates on toggle). Stale
+      // persisted values would mask the real state across devices.
+      //
+      // billingType and tablesRequired are the same kind of value, and getting
+      // them wrong is worse than cosmetic: billingType decides whether the
+      // confirm button collects the money now or records an unpaid order. A
+      // browser that had cached 'postpaid' would run a whole sale down the
+      // restaurant path before the settings request came back.
       partialize: (s) => Object.fromEntries(
-        Object.entries(s).filter(([k]) => k !== 'whatsappEnabled'),
+        Object.entries(s).filter(([k]) => !['whatsappEnabled', 'billingType', 'tablesRequired'].includes(k)),
       ) as PosSettingsState,
       // v1: billGstin/billShowGstn (India-specific names) renamed to the
       // generic billTaxRegistrationNumber/billShowTaxId. Carry existing

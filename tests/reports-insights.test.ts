@@ -132,15 +132,32 @@ async function main() {
   // busiest day=Monday (3), idlest day=Tuesday (0 — no fixture lands there).
   // Timestamps use the DB's canonical space form (UTC wall, what now() and
   // migration v45 produce) so day-range filters compare like-for-like.
+  // Anchored to today, not to a fixed calendar date.
+  //
+  // These fixtures were written as 2026-06-01..07 while the query they exercise
+  // is a rolling window — the test asks for 90 days. They aged out of it and
+  // the suite started failing on a day when nobody had touched the code: on
+  // 14 August those dates were 74 days old and counted, by 1 September they
+  // were 92 days old and did not. Three weeks back keeps them inside any
+  // window this test asks for, and clear of the Wed-Sat fixtures above, which
+  // sit one to two weeks back.
+  const weekdayInWindow = (weekday: number, utcHour: number, utcMinute: number) => {
+    const date = new Date();
+    const daysSinceWeekday = (date.getUTCDay() - weekday + 7) % 7;
+    date.setUTCDate(date.getUTCDate() - daysSinceWeekday - 21);
+    date.setUTCHours(utcHour, utcMinute, 0, 0);
+    // The DB's canonical space form, matching now() and migration v45.
+    return date.toISOString().slice(0, 19).replace('T', ' ');
+  };
   const hourDayFixtures: { id: string; createdAt: string }[] = [
-    { id: 'ORD-INS-1', createdAt: '2026-06-01 08:30:00' }, // Mon 14:00
-    { id: 'ORD-INS-2', createdAt: '2026-06-01 09:00:00' }, // Mon 14:30
-    { id: 'ORD-INS-3', createdAt: '2026-06-01 09:15:00' }, // Mon 14:45
-    { id: 'ORD-INS-4', createdAt: '2026-06-03 04:00:00' }, // Wed 09:30
-    { id: 'ORD-INS-5', createdAt: '2026-06-04 03:00:00' }, // Thu 08:30
-    { id: 'ORD-INS-6', createdAt: '2026-06-05 05:00:00' }, // Fri 10:30
-    { id: 'ORD-INS-7', createdAt: '2026-06-06 06:00:00' }, // Sat 11:30
-    { id: 'ORD-INS-8', createdAt: '2026-06-07 07:00:00' }, // Sun 12:30
+    { id: 'ORD-INS-1', createdAt: weekdayInWindow(1, 8, 30) },  // Mon 14:00
+    { id: 'ORD-INS-2', createdAt: weekdayInWindow(1, 9, 0) },   // Mon 14:30
+    { id: 'ORD-INS-3', createdAt: weekdayInWindow(1, 9, 15) },  // Mon 14:45
+    { id: 'ORD-INS-4', createdAt: weekdayInWindow(3, 4, 0) },   // Wed 09:30
+    { id: 'ORD-INS-5', createdAt: weekdayInWindow(4, 3, 0) },   // Thu 08:30
+    { id: 'ORD-INS-6', createdAt: weekdayInWindow(5, 5, 0) },   // Fri 10:30
+    { id: 'ORD-INS-7', createdAt: weekdayInWindow(6, 6, 0) },   // Sat 11:30
+    { id: 'ORD-INS-8', createdAt: weekdayInWindow(0, 7, 0) },   // Sun 12:30
   ];
   // Zero-value on purpose — only created_at matters for bucketing, and this
   // keeps these 8 orders from perturbing the top-staff revenue ranking below.
@@ -289,10 +306,11 @@ async function main() {
 
     console.log('\n9. GET /api/reports/recentOrders?date=X scopes to that day (dashboard date picker)');
     {
-      const dated = await request(app).get('/api/reports/recentOrders?date=2026-06-01&limit=10').set('Authorization', `Bearer ${ownerToken}`);
+      const mondayDate = hourDayFixtures[0].createdAt.slice(0, 10);
+      const dated = await request(app).get(`/api/reports/recentOrders?date=${mondayDate}&limit=10`).set('Authorization', `Bearer ${ownerToken}`);
       assertEqual(dated.status, 200, `owner gets 200 (got ${dated.status})`);
       const numbers = (dated.body.recentOrders ?? []).map((o: any) => o.order_number).sort();
-      assertEqual(JSON.stringify(numbers), JSON.stringify(['ORD-INS-1', 'ORD-INS-2', 'ORD-INS-3']), 'only the 3 orders created on 2026-06-01 are returned');
+      assertEqual(JSON.stringify(numbers), JSON.stringify(['ORD-INS-1', 'ORD-INS-2', 'ORD-INS-3']), 'only the 3 orders created on the fixtures\' Monday are returned');
 
       const undated = await request(app).get('/api/reports/recentOrders?limit=1').set('Authorization', `Bearer ${ownerToken}`);
       assertEqual(undated.status, 200, `omitting date still works — most-recent-overall behavior preserved (got ${undated.status})`);

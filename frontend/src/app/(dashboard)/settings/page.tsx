@@ -1,12 +1,13 @@
 'use client';
 
+import type { Language } from '@/lib/i18n';
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { useAuthStore } from '@/store/auth';
 import { usePosSettingsStore, type PaperSize, type BillTemplate } from '@/store/pos-settings';
 import { usePrinterStore, usePrinterStatusSync } from '@/hooks/usePrinter';
-import { Settings, Building2, CreditCard, Monitor, Users, Gift, Printer, Share2, FileText, Lock, Smartphone, RefreshCw, Copy, Check, Wifi, Usb, Trash2, Plus, Star, TestTube2, ChefHat, QrCode, CheckCircle2, Database, Cloud, CloudOff, Zap, Percent, KeyRound, AlertTriangle, Wrench, HardDrive, UploadCloud, Hash } from 'lucide-react';
+import { Settings, Building2, CreditCard, Monitor, Users, Gift, Printer, Share2, FileText, Lock, Smartphone, RefreshCw, Copy, Check, Wifi, Usb, Trash2, Plus, Star, TestTube2, ChefHat, QrCode, CheckCircle2, Database, Cloud, CloudOff, Zap, Percent, KeyRound, AlertTriangle, Wrench, HardDrive, UploadCloud, Hash, X } from 'lucide-react';
 import { Tabs, TabsContent } from '@/components/ui/tabs';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
@@ -101,9 +102,9 @@ function Toggle({ value, onChange }: { value: boolean; onChange: (v: boolean) =>
     <button
       type="button"
       onClick={() => onChange(!value)}
-      className={`relative w-11 h-6 rounded-full transition-colors shrink-0 ${value ? 'bg-brand' : 'bg-gray-300'}`}
+      className={`relative w-11 h-6 rounded-full transition-colors shrink-0 ${value ? 'bg-brand' : 'bg-border'}`}
     >
-      <span className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${value ? 'translate-x-5' : 'translate-x-0'}`} />
+      <span className={`absolute top-0.5 left-0.5 w-5 h-5 bg-card rounded-full shadow transition-transform ${value ? 'translate-x-5' : 'translate-x-0'}`} />
     </button>
   );
 }
@@ -127,7 +128,7 @@ function SettingsNavItem({
         indent ? 'pl-7 pr-3 border-l-2 ml-2 md:ml-0' : 'px-3',
         isActive
           ? 'bg-brand/10 text-brand font-semibold' + (indent ? ' border-brand' : '')
-          : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900' + (indent ? ' border-transparent' : ''),
+          : 'text-muted-foreground hover:bg-muted hover:text-foreground' + (indent ? ' border-transparent' : ''),
       ].join(' ')}
     >
       <span>{label}</span>
@@ -168,12 +169,12 @@ function KdsDefaultViewCard() {
   }
 
   return (
-    <div className="bg-white rounded-xl border border-gray-100 p-6">
+    <div className="bg-card rounded-xl border border-border p-6">
       <div className="flex items-center gap-2 mb-4">
-        <Monitor size={20} className="text-gray-500" />
-        <h2 className="font-semibold text-gray-900">{t('settings.kdsDefaultView')}</h2>
+        <Monitor size={20} className="text-muted-foreground" />
+        <h2 className="font-semibold text-foreground">{t('settings.kdsDefaultView')}</h2>
       </div>
-      <p className="text-sm text-gray-500 mb-5">{t('settings.kdsDefaultViewHint')}</p>
+      <p className="text-sm text-muted-foreground mb-5">{t('settings.kdsDefaultViewHint')}</p>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <button
@@ -182,14 +183,14 @@ function KdsDefaultViewCard() {
           className={`text-left rounded-lg border-2 px-4 py-3 transition ${
             view === 'tabs'
               ? 'border-brand bg-brand/5'
-              : 'border-gray-200 hover:border-gray-300'
+              : 'border-border hover:border-input'
           }`}
         >
           <div className="flex items-center gap-2 mb-1">
             <input type="radio" readOnly checked={view === 'tabs'} className="text-brand" />
-            <span className="font-medium text-gray-900">{t('settings.kdsDefaultViewTabs')}</span>
+            <span className="font-medium text-foreground">{t('settings.kdsDefaultViewTabs')}</span>
           </div>
-          <p className="text-xs text-gray-500 ml-6">{t('settings.kdsDefaultViewTabsHint')}</p>
+          <p className="text-xs text-muted-foreground ml-6">{t('settings.kdsDefaultViewTabsHint')}</p>
         </button>
         <button
           type="button"
@@ -197,18 +198,18 @@ function KdsDefaultViewCard() {
           className={`text-left rounded-lg border-2 px-4 py-3 transition ${
             view === 'kanban'
               ? 'border-brand bg-brand/5'
-              : 'border-gray-200 hover:border-gray-300'
+              : 'border-border hover:border-input'
           }`}
         >
           <div className="flex items-center gap-2 mb-1">
             <input type="radio" readOnly checked={view === 'kanban'} className="text-brand" />
-            <span className="font-medium text-gray-900">{t('settings.kdsDefaultViewKanban')}</span>
+            <span className="font-medium text-foreground">{t('settings.kdsDefaultViewKanban')}</span>
           </div>
-          <p className="text-xs text-gray-500 ml-6">{t('settings.kdsDefaultViewKanbanHint')}</p>
+          <p className="text-xs text-muted-foreground ml-6">{t('settings.kdsDefaultViewKanbanHint')}</p>
         </button>
       </div>
 
-      <div className="flex justify-end mt-5 pt-4 border-t border-gray-100">
+      <div className="flex justify-end mt-5 pt-4 border-t border-border">
         <button
           type="button"
           onClick={save}
@@ -1771,6 +1772,7 @@ export default function SettingsPage() {
   const paperSizeOptions: { value: PaperSize; label: string }[] = [
     { value: 'thermal58', label: t('settings.paperSize58') },
     { value: 'thermal80', label: t('settings.paperSize80') },
+    { value: 'a5', label: t('settings.paperSizeA5') },
   ];
 
   const isDirty = 
@@ -1821,14 +1823,14 @@ export default function SettingsPage() {
         <div className="w-full md:w-40 md:min-w-[10rem] shrink-0 md:sticky md:top-0">
           <div className="flex items-center gap-3 mb-6">
             <Settings size={28} className="text-brand" />
-            <h1 className="text-2xl font-bold text-gray-900">{t('settings.title')}</h1>
+            <h1 className="text-2xl font-bold text-foreground">{t('settings.title')}</h1>
           </div>
 
-           <nav className="flex md:flex-col gap-0.5 overflow-x-auto md:overflow-x-visible border-b md:border-b-0 md:border-r border-gray-200 pb-2 md:pb-0 md:pr-2">
+           <nav className="flex md:flex-col gap-0.5 overflow-x-auto md:overflow-x-visible border-b md:border-b-0 md:border-r border-border pb-2 md:pb-0 md:pr-2">
 
             {/* General group */}
-            <div className="hidden md:block px-3 pt-3 pb-2 mt-2 mb-1 border-b border-gray-100">
-              <p className="text-[11px] font-bold uppercase tracking-widest text-gray-400">{t('settings.navGroupGeneral')}</p>
+            <div className="hidden md:block px-3 pt-3 pb-2 mt-2 mb-1 border-b border-border">
+              <p className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground/70">{t('settings.navGroupGeneral')}</p>
             </div>
             <SettingsNavItem label={t('settings.storeDetails')} value="store" active={activeTab} onClick={setActiveTab} />
             <SettingsNavItem label={t('settings.tabPrinters')} value="receipts-printers" active={activeTab} onClick={setActiveTab} />
@@ -1837,8 +1839,8 @@ export default function SettingsPage() {
             )}
 
             {/* Operations group */}
-            <div className="hidden md:block px-3 pt-4 pb-2 mt-3 mb-1 border-b border-gray-100">
-              <p className="text-[11px] font-bold uppercase tracking-widest text-gray-400">{t('settings.navGroupOperations')}</p>
+            <div className="hidden md:block px-3 pt-4 pb-2 mt-3 mb-1 border-b border-border">
+              <p className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground/70">{t('settings.navGroupOperations')}</p>
             </div>
             <SettingsNavItem label={t('settings.posWorkflow')} value="pos" active={activeTab} onClick={setActiveTab} />
             <SettingsNavItem label={t('settings.tabKds')} value="kds" active={activeTab} onClick={setActiveTab} />
@@ -1847,23 +1849,23 @@ export default function SettingsPage() {
             <SettingsNavItem label={t('settings.tabWhatsapp')} value="whatsapp" active={activeTab} onClick={setActiveTab} />
 
             {/* Customers group */}
-            <div className="hidden md:block px-3 pt-4 pb-2 mt-3 mb-1 border-b border-gray-100">
-              <p className="text-[11px] font-bold uppercase tracking-widest text-gray-400">{t('settings.navGroupCustomers')}</p>
+            <div className="hidden md:block px-3 pt-4 pb-2 mt-3 mb-1 border-b border-border">
+              <p className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground/70">{t('settings.navGroupCustomers')}</p>
             </div>
             <SettingsNavItem label={t('settings.loyalty')} value="loyalty" active={activeTab} onClick={setActiveTab} />
             <SettingsNavItem label={t('settings.discounts')} value="discounts" active={activeTab} onClick={setActiveTab} />
 
             {/* Integrations group (formerly "Data") */}
-            <div className="hidden md:block px-3 pt-4 pb-2 mt-3 mb-1 border-b border-gray-100">
-              <p className="text-[11px] font-bold uppercase tracking-widest text-gray-400">{t('settings.navGroupData')}</p>
+            <div className="hidden md:block px-3 pt-4 pb-2 mt-3 mb-1 border-b border-border">
+              <p className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground/70">{t('settings.navGroupData')}</p>
             </div>
             <SettingsNavItem label={t('settings.tabMobileAccess')} value="mobile-access" active={activeTab} onClick={setActiveTab} />
             <SettingsNavItem label={t('settings.tabBackupData')} value="data" active={activeTab} onClick={setActiveTab} />
             <SettingsNavItem label={t('settings.tabOrderflow')} value="orderflow" active={activeTab} onClick={setActiveTab} />
 
             {/* Account group */}
-            <div className="hidden md:block px-3 pt-4 pb-2 mt-3 mb-1 border-b border-gray-100">
-              <p className="text-[11px] font-bold uppercase tracking-widest text-gray-400">{t('settings.navGroupAccount')}</p>
+            <div className="hidden md:block px-3 pt-4 pb-2 mt-3 mb-1 border-b border-border">
+              <p className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground/70">{t('settings.navGroupAccount')}</p>
             </div>
             <SettingsNavItem label={t('settings.account')} value="account" active={activeTab} onClick={setActiveTab} attention={Boolean((cloudAccount?.email && !cloudAccount?.verified) || cloudAccount?.deletion_request?.status === 'pending')} />
             <SettingsNavItem label={t('settings.privacy')} value="privacy" active={activeTab} onClick={setActiveTab} />
@@ -1878,12 +1880,12 @@ export default function SettingsPage() {
         <TabsContent value="store">
           <div className="pb-6 max-w-3xl space-y-6">
             {/* Store Details — editable for admin, readonly otherwise */}
-            <div className="lg:col-span-2 bg-white rounded-xl border border-gray-100 p-6">
+            <div className="lg:col-span-2 bg-card rounded-xl border border-border p-6">
               <div className="flex items-center gap-2 mb-4">
-                <Building2 size={20} className="text-gray-500" />
-                <h2 className="font-semibold text-gray-900">{t('settings.storeDetails')}</h2>
+                <Building2 size={20} className="text-muted-foreground" />
+                <h2 className="font-semibold text-foreground">{t('settings.storeDetails')}</h2>
                 {!isAdmin && (
-                  <span className="ml-auto flex items-center gap-1 text-xs text-gray-400">
+                  <span className="ml-auto flex items-center gap-1 text-xs text-muted-foreground/70">
                     <Lock size={12} /> {t('settings.adminOnly')}
                   </span>
                 )}
@@ -1891,21 +1893,21 @@ export default function SettingsPage() {
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm text-gray-500 mb-1">{t('settings.businessName')}</label>
+                  <label className="block text-sm text-muted-foreground mb-1">{t('settings.businessName')}</label>
                   {isAdmin ? (
                     <input type="text" value={form.businessName} onChange={(e) => setForm((p) => ({ ...p, businessName: e.target.value }))}
-                      className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg outline-none focus:ring-2 focus:ring-brand" />
+                      className="w-full px-3 py-2 text-sm border border-border rounded-lg outline-none focus:ring-2 focus:ring-brand" />
                   ) : (
-                    <p className="font-medium text-gray-900">{form.businessName || currentTenant?.business_name}</p>
+                    <p className="font-medium text-foreground">{form.businessName || currentTenant?.business_name}</p>
                   )}
                 </div>
                 {/* Country, Timezone, Currency in single line with individual headings */}
                 <div className="md:col-span-2 space-y-2">
                   {/* Headings */}
                   <div className="grid grid-cols-3 gap-2">
-                    <label className="text-sm text-gray-500">{t('settings.country')}</label>
-                    <label className="text-sm text-gray-500">{t('settings.timezone')}</label>
-                    <label className="text-sm text-gray-500">{t('settings.currency')}</label>
+                    <label className="text-sm text-muted-foreground">{t('settings.country')}</label>
+                    <label className="text-sm text-muted-foreground">{t('settings.timezone')}</label>
+                    <label className="text-sm text-muted-foreground">{t('settings.currency')}</label>
                   </div>
                   
                   {/* Input fields */}
@@ -1923,7 +1925,7 @@ export default function SettingsPage() {
                           }));
                         }}
                         aria-label={t('common.search')}
-                        className="px-3 py-2 text-sm border border-gray-200 rounded-lg outline-none focus:ring-2 focus:ring-brand bg-white"
+                        className="px-3 py-2 text-sm border border-border rounded-lg outline-none focus:ring-2 focus:ring-brand bg-card"
                       >
                         <option value="">{t('settings.selectCountry')}</option>
                         {COUNTRIES.map((c) => (
@@ -1935,7 +1937,7 @@ export default function SettingsPage() {
                         value={form.timezone} 
                         onChange={(e) => setForm((p) => ({ ...p, timezone: e.target.value }))}
                         placeholder={t('settings.timezoneAutoFilled')}
-                        className="px-3 py-2 text-sm border border-gray-200 rounded-lg outline-none focus:ring-2 focus:ring-brand bg-gray-50" 
+                        className="px-3 py-2 text-sm border border-border rounded-lg outline-none focus:ring-2 focus:ring-brand bg-muted" 
                         readOnly
                       />
                       <input 
@@ -1943,128 +1945,128 @@ export default function SettingsPage() {
                         value={form.currency} 
                         onChange={(e) => setForm((p) => ({ ...p, currency: e.target.value }))}
                         placeholder={t('settings.currencyAutoFilled')}
-                        className="px-3 py-2 text-sm border border-gray-200 rounded-lg outline-none focus:ring-2 focus:ring-brand bg-gray-50" 
+                        className="px-3 py-2 text-sm border border-border rounded-lg outline-none focus:ring-2 focus:ring-brand bg-muted" 
                         readOnly
                       />
                     </div>
                   ) : (
                     <div className="grid grid-cols-3 gap-2">
-                      <p className="font-medium text-gray-900">
+                      <p className="font-medium text-foreground">
                         {form.countryCode ? countryName(form.countryCode) : '—'}
                       </p>
-                      <p className="font-medium text-gray-900">
+                      <p className="font-medium text-foreground">
                         {form.timezone || '—'}
                       </p>
-                      <p className="font-medium text-gray-900">
+                      <p className="font-medium text-foreground">
                         {form.currency || '—'}
                       </p>
                     </div>
                   )}
                 </div>
                 <div>
-                  <label className="block text-sm text-gray-500 mb-1">{t('settings.billingType')}</label>
+                  <label className="block text-sm text-muted-foreground mb-1">{t('settings.billingType')}</label>
                   {isAdmin ? (
                     <select value={form.billingType}
                       onChange={(e) => setForm((p) => ({ ...p, billingType: e.target.value as 'postpaid' | 'prepaid' }))}
-                      className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg outline-none focus:ring-2 focus:ring-brand bg-white">
+                      className="w-full px-3 py-2 text-sm border border-border rounded-lg outline-none focus:ring-2 focus:ring-brand bg-card">
                       <option value="postpaid">{t('settings.billingTypePostpaid')}</option>
                       <option value="prepaid">{t('settings.billingTypePrepaid')}</option>
                     </select>
                   ) : (
-                    <p className="font-medium text-gray-900 capitalize">{form.billingType}</p>
+                    <p className="font-medium text-foreground capitalize">{form.billingType}</p>
                   )}
                 </div>
                 <div>
-                  <label className="block text-sm text-gray-500 mb-1">{t('settings.tablesRequired')}</label>
+                  <label className="block text-sm text-muted-foreground mb-1">{t('settings.tablesRequired')}</label>
                   {isAdmin ? (
                     <select
                       value={form.tablesRequired ? 'yes' : 'no'}
                       onChange={(e) => setForm((p) => ({ ...p, tablesRequired: e.target.value === 'yes' }))}
-                      className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg outline-none focus:ring-2 focus:ring-brand bg-white"
+                      className="w-full px-3 py-2 text-sm border border-border rounded-lg outline-none focus:ring-2 focus:ring-brand bg-card"
                     >
                       <option value="yes">{t('settings.tablesRequiredYes')}</option>
                       <option value="no">{t('settings.tablesRequiredNo')}</option>
                     </select>
                   ) : (
-                    <p className="font-medium text-gray-900">{form.tablesRequired ? t('settings.yes') : t('settings.no')}</p>
+                    <p className="font-medium text-foreground">{form.tablesRequired ? t('settings.yes') : t('settings.no')}</p>
                   )}
                 </div>
                 <div>
-                  <label className="block text-sm text-gray-500 mb-1">{t('settings.taxRegistered', { defaultValue: 'Tax Registered' })}</label>
+                  <label className="block text-sm text-muted-foreground mb-1">{t('settings.taxRegistered', { defaultValue: 'Tax Registered' })}</label>
                   {isAdmin ? (
                     <select
                       value={form.taxRegistered ? 'yes' : 'no'}
                       onChange={(e) => setForm((p) => ({ ...p, taxRegistered: e.target.value === 'yes' }))}
-                      className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg outline-none focus:ring-2 focus:ring-brand bg-white"
+                      className="w-full px-3 py-2 text-sm border border-border rounded-lg outline-none focus:ring-2 focus:ring-brand bg-card"
                     >
                       <option value="yes">{t('settings.yes')}</option>
                       <option value="no">{t('settings.no')}</option>
                     </select>
                   ) : (
-                    <p className="font-medium text-gray-900">{form.taxRegistered ? t('settings.yes') : t('settings.no')}</p>
+                    <p className="font-medium text-foreground">{form.taxRegistered ? t('settings.yes') : t('settings.no')}</p>
                   )}
                 </div>
                 {form.taxRegistered ? (
                   <div>
-                    <label className="block text-sm text-gray-500 mb-1">{t('settings.taxIdLabel')}</label>
+                    <label className="block text-sm text-muted-foreground mb-1">{t('settings.taxIdLabel')}</label>
                     {isAdmin ? (
                       <>
                         <input type="text" value={form.taxRegistrationNumber} onChange={(e) => setForm((p) => ({ ...p, taxRegistrationNumber: e.target.value }))}
                           placeholder={t('settings.taxIdPlaceholder')}
                           className={`w-full px-3 py-2 text-sm border rounded-lg outline-none focus:ring-2 focus:ring-brand ${
                             taxIdFormat && form.taxRegistrationNumber && !new RegExp(taxIdFormat.pattern, 'i').test(form.taxRegistrationNumber.trim())
-                              ? 'border-red-300' : 'border-gray-200'
+                              ? 'border-red-300' : 'border-border'
                           }`} />
                         {taxIdFormat && (
                           <p className={`text-xs mt-1 ${
                             form.taxRegistrationNumber && !new RegExp(taxIdFormat.pattern, 'i').test(form.taxRegistrationNumber.trim())
-                              ? 'text-red-600' : 'text-gray-400'
+                              ? 'text-red-600' : 'text-muted-foreground/70'
                           }`}>
                             {t('settings.taxIdFormatHint', { country: countryName(form.countryCode), description: taxIdFormat.description })}
                           </p>
                         )}
                       </>
                     ) : (
-                      <p className="font-medium text-gray-900">{form.taxRegistrationNumber || '—'}</p>
+                      <p className="font-medium text-foreground">{form.taxRegistrationNumber || '—'}</p>
                     )}
                   </div>
                 ) : <div className="hidden md:block" />}
                 <div>
-                  <label className="block text-sm text-gray-500 mb-1">{t('settings.phone')}</label>
+                  <label className="block text-sm text-muted-foreground mb-1">{t('settings.phone')}</label>
                   {isAdmin ? (
                     <input type="text" value={form.businessPhone} onChange={(e) => setForm((p) => ({ ...p, businessPhone: e.target.value }))}
                       placeholder={t('settings.phonePlaceholder', { dialCode: dialCodeFor(form.countryCode) || '+1', defaultValue: '+1 555 000 0000' })}
-                      className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg outline-none focus:ring-2 focus:ring-brand" />
+                      className="w-full px-3 py-2 text-sm border border-border rounded-lg outline-none focus:ring-2 focus:ring-brand" />
                   ) : (
-                    <p className="font-medium text-gray-900">{form.businessPhone || '—'}</p>
+                    <p className="font-medium text-foreground">{form.businessPhone || '—'}</p>
                   )}
                 </div>
                 <div className="md:col-span-2">
-                  <label className="block text-sm text-gray-500 mb-1">{t('settings.address')}</label>
+                  <label className="block text-sm text-muted-foreground mb-1">{t('settings.address')}</label>
                   {isAdmin ? (
                     <textarea value={form.businessAddress} onChange={(e) => setForm((p) => ({ ...p, businessAddress: e.target.value }))}
                       rows={2} placeholder={t('settings.addressPlaceholder')}
-                      className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg outline-none focus:ring-2 focus:ring-brand resize-none" />
+                      className="w-full px-3 py-2 text-sm border border-border rounded-lg outline-none focus:ring-2 focus:ring-brand resize-none" />
                   ) : (
-                    <p className="font-medium text-gray-900">{form.businessAddress || '—'}</p>
+                    <p className="font-medium text-foreground">{form.businessAddress || '—'}</p>
                   )}
                 </div>
                 <div>
-                  <label className="block text-sm text-gray-500 mb-1">{t('settings.instagramHandle')}</label>
+                  <label className="block text-sm text-muted-foreground mb-1">{t('settings.instagramHandle')}</label>
                   {isAdmin ? (
                     <input type="text" value={form.instagramHandle} onChange={(e) => setForm((p) => ({ ...p, instagramHandle: e.target.value }))}
                       placeholder={t('settings.instagramPlaceholder')}
-                      className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg outline-none focus:ring-2 focus:ring-brand" />
+                      className="w-full px-3 py-2 text-sm border border-border rounded-lg outline-none focus:ring-2 focus:ring-brand" />
                   ) : (
-                    <p className="font-medium text-gray-900">{form.instagramHandle || '—'}</p>
+                    <p className="font-medium text-foreground">{form.instagramHandle || '—'}</p>
                   )}
-                  <p className="text-xs text-gray-500 mt-1">{t('settings.instagramHint')}</p>
+                  <p className="text-xs text-muted-foreground mt-1">{t('settings.instagramHint')}</p>
                 </div>
               </div>
 
               {/* Bill display toggles */}
-              <div className="mt-5 pt-5 border-t border-gray-100">
-                <p className="text-sm font-semibold text-gray-700 mb-3">{t('settings.showOnInvoice')}</p>
+              <div className="mt-5 pt-5 border-t border-border">
+                <p className="text-sm font-semibold text-foreground mb-3">{t('settings.showOnInvoice')}</p>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   {([
                     { label: t('settings.showBusinessName'), key: 'billShowName' as const },
@@ -2073,7 +2075,7 @@ export default function SettingsPage() {
                     { label: t('settings.showTaxId'), key: 'billShowTaxId' as const },
                   ] as const).map((item) => (
                     <div key={item.key} className="flex items-center justify-between py-2">
-                      <span className="text-sm text-gray-700">{item.label}</span>
+                      <span className="text-sm text-foreground">{item.label}</span>
                       <Toggle
                         value={form[item.key]}
                         onChange={isAdmin ? (v) => setForm((p) => ({ ...p, [item.key]: v })) : () => {}}
@@ -2090,12 +2092,12 @@ export default function SettingsPage() {
             </div>
 
             {/* Order Number Format */}
-            <div className="bg-white rounded-xl border border-gray-100 p-6">
+            <div className="bg-card rounded-xl border border-border p-6">
               <div className="flex items-center gap-2 mb-4">
-                <Hash size={20} className="text-gray-500" />
-                <h2 className="font-semibold text-gray-900">{t('settings.orderNumberFormat', { defaultValue: 'Order Number Format' })}</h2>
+                <Hash size={20} className="text-muted-foreground" />
+                <h2 className="font-semibold text-foreground">{t('settings.orderNumberFormat', { defaultValue: 'Order Number Format' })}</h2>
                 {!isAdmin && (
-                  <span className="ml-auto flex items-center gap-1 text-xs text-gray-400">
+                  <span className="ml-auto flex items-center gap-1 text-xs text-muted-foreground/70">
                     <Lock size={12} /> {t('settings.adminOnly')}
                   </span>
                 )}
@@ -2103,7 +2105,7 @@ export default function SettingsPage() {
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm text-gray-500 mb-1">{t('settings.orderNumberPrefix', { defaultValue: 'Prefix' })}</label>
+                  <label className="block text-sm text-muted-foreground mb-1">{t('settings.orderNumberPrefix', { defaultValue: 'Prefix' })}</label>
                   {isAdmin ? (
                     <input
                       type="text"
@@ -2111,15 +2113,15 @@ export default function SettingsPage() {
                       onChange={(e) => setOrderNumberForm((p) => ({ ...p, prefix: e.target.value.toUpperCase() }))}
                       placeholder="ORD"
                       maxLength={12}
-                      className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg outline-none focus:ring-2 focus:ring-brand"
+                      className="w-full px-3 py-2 text-sm border border-border rounded-lg outline-none focus:ring-2 focus:ring-brand"
                     />
                   ) : (
-                    <p className="font-medium text-gray-900">{orderNumberForm.prefix || '—'}</p>
+                    <p className="font-medium text-foreground">{orderNumberForm.prefix || '—'}</p>
                   )}
                 </div>
                 <div>
-                  <label className="block text-sm text-gray-500 mb-1">{t('settings.orderNumberPreview', { defaultValue: 'Preview' })}</label>
-                  <p className="font-mono font-medium text-gray-900 px-3 py-2 bg-gray-50 rounded-lg border border-gray-100">
+                  <label className="block text-sm text-muted-foreground mb-1">{t('settings.orderNumberPreview', { defaultValue: 'Preview' })}</label>
+                  <p className="font-mono font-medium text-foreground px-3 py-2 bg-muted rounded-lg border border-border">
                     {[
                       orderNumberForm.prefix,
                       orderNumberForm.includeDate ? new Date().toISOString().slice(0, 10).replace(/-/g, '') : '',
@@ -2129,11 +2131,11 @@ export default function SettingsPage() {
                 </div>
               </div>
 
-              <div className="mt-5 pt-5 border-t border-gray-100 space-y-3">
+              <div className="mt-5 pt-5 border-t border-border space-y-3">
                 <div className="flex items-center justify-between py-2">
                   <div>
-                    <span className="text-sm text-gray-700">{t('settings.orderNumberIncludeDate', { defaultValue: 'Include date in order number' })}</span>
-                    <p className="text-xs text-gray-500">{t('settings.orderNumberIncludeDateHint', { defaultValue: 'Adds the current date (YYYYMMDD) after the prefix.' })}</p>
+                    <span className="text-sm text-foreground">{t('settings.orderNumberIncludeDate', { defaultValue: 'Include date in order number' })}</span>
+                    <p className="text-xs text-muted-foreground">{t('settings.orderNumberIncludeDateHint', { defaultValue: 'Adds the current date (YYYYMMDD) after the prefix.' })}</p>
                   </div>
                   <Toggle
                     value={orderNumberForm.includeDate}
@@ -2142,8 +2144,8 @@ export default function SettingsPage() {
                 </div>
                 <div className="flex items-center justify-between py-2">
                   <div>
-                    <span className="text-sm text-gray-700">{t('settings.orderNumberResetDaily', { defaultValue: 'Reset series every 24 hours' })}</span>
-                    <p className="text-xs text-gray-500">{t('settings.orderNumberResetDailyHint', { defaultValue: 'Numbering restarts from 1 at midnight in the store’s timezone.' })}</p>
+                    <span className="text-sm text-foreground">{t('settings.orderNumberResetDaily', { defaultValue: 'Reset series every 24 hours' })}</span>
+                    <p className="text-xs text-muted-foreground">{t('settings.orderNumberResetDailyHint', { defaultValue: 'Numbering restarts from 1 at midnight in the store’s timezone.' })}</p>
                   </div>
                   <Toggle
                     value={orderNumberForm.resetDaily}
@@ -2155,18 +2157,18 @@ export default function SettingsPage() {
 
 
             {/* Subscription */}
-            <div className="bg-white rounded-xl border border-gray-100 p-6">
+            <div className="bg-card rounded-xl border border-border p-6">
               <div className="flex items-center gap-2 mb-4">
-                <CreditCard size={20} className="text-gray-500" />
-                <h2 className="font-semibold text-gray-900">{t('settings.subscription')}</h2>
+                <CreditCard size={20} className="text-muted-foreground" />
+                <h2 className="font-semibold text-foreground">{t('settings.subscription')}</h2>
               </div>
               <div className="space-y-3">
                 <div>
-                  <p className="text-sm text-gray-500">{t('settings.plan')}</p>
-                  <p className="font-medium text-gray-900 capitalize">{currentTenant?.plan}</p>
+                  <p className="text-sm text-muted-foreground">{t('settings.plan')}</p>
+                  <p className="font-medium text-foreground capitalize">{currentTenant?.plan}</p>
                 </div>
                 <div>
-                  <p className="text-sm text-gray-500">{t('settings.status')}</p>
+                  <p className="text-sm text-muted-foreground">{t('settings.status')}</p>
                   <span className={`px-2.5 py-1 rounded-full text-xs font-medium ${
                     currentTenant?.status === 'active' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
                   }`}>
@@ -2174,19 +2176,21 @@ export default function SettingsPage() {
                   </span>
                 </div>
                 <div>
-                  <p className="text-sm text-gray-500 mb-1">{t('settings.languages')}</p>
+                  <p className="text-sm text-muted-foreground mb-1">{t('settings.languages')}</p>
                   <select
                     value={language}
                     onChange={(e) => {
-                      const lang = e.target.value as 'en' | 'es' | 'pt';
+                      const lang = e.target.value as Language;
                       setLanguage(lang);
                       api.put('/settings/business', { language: lang }).catch(() => toast.error(t('settings.saveFailed')));
                     }}
-                    className="block w-full rounded-md border-gray-200 shadow-sm focus:border-brand focus:ring-brand sm:text-sm px-3 py-2 border"
+                    className="block w-full rounded-md border-border shadow-sm focus:border-brand focus:ring-brand sm:text-sm px-3 py-2 border"
                   >
                     <option value="en">{t('settings.languageEn')}</option>
                     <option value="es">{t('settings.languageEs')}</option>
                     <option value="pt">{t('settings.languagePt')}</option>
+                    <option value="fr">{t('settings.languageFr')}</option>
+                    <option value="ar">{t('settings.languageAr')}</option>
                   </select>
                 </div>
               </div>
@@ -2205,15 +2209,15 @@ export default function SettingsPage() {
         <TabsContent value="pos">
           <div className="pb-6 max-w-3xl space-y-6">
             {/* POS Display */}
-            <div className="bg-white rounded-xl border border-gray-100 p-6">
+            <div className="bg-card rounded-xl border border-border p-6">
               <div className="flex items-center gap-2 mb-4">
-                <Monitor size={20} className="text-gray-500" />
-                <h2 className="font-semibold text-gray-900">{t('settings.posDisplay')}</h2>
+                <Monitor size={20} className="text-muted-foreground" />
+                <h2 className="font-semibold text-foreground">{t('settings.posDisplay')}</h2>
               </div>
               <div className="flex items-center justify-between gap-4">
                 <div className="flex-1 min-w-0">
-                  <p className="font-medium text-gray-900">{t('settings.showProductImages')}</p>
-                  <p className="text-sm text-gray-500">{t('settings.showProductImagesHint')}</p>
+                  <p className="font-medium text-foreground">{t('settings.showProductImages')}</p>
+                  <p className="text-sm text-muted-foreground">{t('settings.showProductImagesHint')}</p>
                 </div>
                 <Toggle value={posSettings.showProductImages} onChange={(v) => {
                   posSettings.setShowProductImages(v);
@@ -2223,27 +2227,27 @@ export default function SettingsPage() {
             </div>
 
             {/* POS Workflow */}
-            <div className="bg-white rounded-xl border border-gray-100 p-6">
+            <div className="bg-card rounded-xl border border-border p-6">
               <div className="flex items-center gap-2 mb-4">
-                <Users size={20} className="text-gray-500" />
-                <h2 className="font-semibold text-gray-900">{t('settings.posWorkflow')}</h2>
+                <Users size={20} className="text-muted-foreground" />
+                <h2 className="font-semibold text-foreground">{t('settings.posWorkflow')}</h2>
               </div>
               <div className="space-y-4">
                 <div className="flex items-center justify-between gap-4">
                   <div className="flex-1 min-w-0">
-                    <p className="font-medium text-gray-900">{t('settings.customerMandatory')}</p>
-                    <p className="text-sm text-gray-500">{t('settings.customerMandatoryHint')}</p>
+                    <p className="font-medium text-foreground">{t('settings.customerMandatory')}</p>
+                    <p className="text-sm text-muted-foreground">{t('settings.customerMandatoryHint')}</p>
                   </div>
                   <Toggle value={posSettings.customerMandatory} onChange={(v) => {
                     posSettings.setCustomerMandatory(v);
                     toast.success(v ? t('settings.customerMandatoryEnabled', { defaultValue: 'Mandatory customer enabled' }) : t('settings.customerMandatoryDisabled', { defaultValue: 'Mandatory customer disabled' }), { id: 'pos-local' });
                   }} />
                 </div>
-                <p className="text-sm text-gray-500">{t('settings.phoneDigitsDerived')}</p>
-                <div className="flex items-center justify-between gap-4 pt-2 border-t border-gray-100">
+                <p className="text-sm text-muted-foreground">{t('settings.phoneDigitsDerived')}</p>
+                <div className="flex items-center justify-between gap-4 pt-2 border-t border-border">
                   <div className="flex-1 min-w-0">
-                    <p className="font-medium text-gray-900">{t('settings.enforcePhoneLength', { defaultValue: 'Enforce Phone Number Length' })}</p>
-                    <p className="text-sm text-gray-500">{t('settings.enforcePhoneLengthHint', { defaultValue: 'Automatically jump to the Name field once a valid phone number for your country has been typed — e.g. 10 digits for India.' })}</p>
+                    <p className="font-medium text-foreground">{t('settings.enforcePhoneLength', { defaultValue: 'Enforce Phone Number Length' })}</p>
+                    <p className="text-sm text-muted-foreground">{t('settings.enforcePhoneLengthHint', { defaultValue: 'Automatically jump to the Name field once a valid phone number for your country has been typed — e.g. 10 digits for India.' })}</p>
                   </div>
                   <Toggle value={posSettings.enforcePhoneLength} onChange={(v) => {
                     posSettings.setEnforcePhoneLength(v);
@@ -2254,12 +2258,12 @@ export default function SettingsPage() {
             </div>
 
             {/* Add a cashier — pair another device onto the same POS over the local network */}
-            <div className="bg-white rounded-xl border border-gray-100 p-6">
+            <div className="bg-card rounded-xl border border-border p-6">
               <div className="flex items-center gap-2 mb-4">
-                <Smartphone size={20} className="text-gray-500" />
-                <h2 className="font-semibold text-gray-900">{t('settings.posPairing')}</h2>
+                <Smartphone size={20} className="text-muted-foreground" />
+                <h2 className="font-semibold text-foreground">{t('settings.posPairing')}</h2>
               </div>
-              <p className="text-sm text-gray-500 mb-5">
+              <p className="text-sm text-muted-foreground mb-5">
                 {t('settings.posPairingHint')}
               </p>
 
@@ -2275,15 +2279,15 @@ export default function SettingsPage() {
                     <>
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 w-full">
                         {posInfo.ips_data.map((ipInfo: { ip: string; url: string; qr_data: string | null }, idx: number) => (
-                          <div key={idx} className="flex flex-col items-center p-4 bg-gray-50 border border-gray-200 rounded-lg">
-                            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">
+                          <div key={idx} className="flex flex-col items-center p-4 bg-muted border border-border rounded-lg">
+                            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">
                               {ipInfo.ip.startsWith('100.') ? t('settings.vpnMeshNetwork') : t('settings.localNetwork')}
                             </p>
                             {ipInfo.qr_data ? (
-                              <img src={ipInfo.qr_data} alt={`QR Code for ${ipInfo.ip}`} className="w-40 h-40 rounded-lg mb-3 bg-white p-2 border border-gray-100" />
+                              <img src={ipInfo.qr_data} alt={`QR Code for ${ipInfo.ip}`} className="w-40 h-40 rounded-lg mb-3 bg-card p-2 border border-border" />
                             ) : (
-                              <div className="w-40 h-40 bg-gray-100 rounded-lg flex items-center justify-center mb-3">
-                                <QrCode size={40} className="text-gray-400" />
+                              <div className="w-40 h-40 bg-muted rounded-lg flex items-center justify-center mb-3">
+                                <QrCode size={40} className="text-muted-foreground/70" />
                               </div>
                             )}
                             <a href={ipInfo.url} target="_blank" rel="noopener noreferrer" className="text-xs font-mono text-brand hover:underline break-all text-center">
@@ -2310,23 +2314,23 @@ export default function SettingsPage() {
                     <div className="flex flex-col sm:flex-row gap-6 items-start">
                       <div className="shrink-0">
                         {posInfo.qr_data_url ? (
-                          <img src={posInfo.qr_data_url} alt={t('settings.posQrAlt')} className="w-48 h-48 rounded-xl border border-gray-200" />
+                          <img src={posInfo.qr_data_url} alt={t('settings.posQrAlt')} className="w-48 h-48 rounded-xl border border-border" />
                         ) : (
-                          <div className="w-48 h-48 rounded-xl border border-gray-200 flex items-center justify-center text-gray-400">
+                          <div className="w-48 h-48 rounded-xl border border-border flex items-center justify-center text-muted-foreground/70">
                             <QrCode size={48} />
                           </div>
                         )}
                       </div>
                       <div className="flex-1 space-y-4">
                         <div>
-                          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">{t('settings.directIp')}</p>
+                          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">{t('settings.directIp')}</p>
                           <a href={posInfo.ip_url} target="_blank" rel="noopener noreferrer" className="block font-mono text-sm text-brand break-all hover:underline">
                             {posInfo.ip_url}
                           </a>
                         </div>
                         <div>
-                          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">{t('settings.mdnsAlwaysStable')}</p>
-                          <a href={posInfo.mdns_url} target="_blank" rel="noopener noreferrer" className="block font-mono text-sm text-gray-700 break-all hover:underline">
+                          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">{t('settings.mdnsAlwaysStable')}</p>
+                          <a href={posInfo.mdns_url} target="_blank" rel="noopener noreferrer" className="block font-mono text-sm text-foreground break-all hover:underline">
                             {posInfo.mdns_url}
                           </a>
                         </div>
@@ -2334,9 +2338,9 @@ export default function SettingsPage() {
                     </div>
                   )}
 
-                  <div className="flex justify-end border-t border-gray-200 pt-4">
+                  <div className="flex justify-end border-t border-border pt-4">
                     <button onClick={fetchPosInfo} disabled={posInfoLoading}
-                      className="flex items-center gap-2 text-sm text-gray-500 hover:text-gray-800">
+                      className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground">
                       <RefreshCw size={14} className={posInfoLoading ? 'animate-spin' : ''} />
                       {t('settings.refreshUrls')}
                     </button>
@@ -2346,7 +2350,7 @@ export default function SettingsPage() {
 
               {!posInfo && !posInfoLoading && (
                 <>
-                  <p className="text-sm text-gray-500 mb-3">
+                  <p className="text-sm text-muted-foreground mb-3">
                     {t('settings.posLoadHint')}
                   </p>
                   <button onClick={fetchPosInfo}
@@ -2363,11 +2367,11 @@ export default function SettingsPage() {
         <TabsContent value="kds">
           <div className="pb-6 max-w-3xl space-y-6">
             {/* KDS on/off (issue #133) — not every business runs a Kitchen Display. */}
-            <div className="bg-white rounded-xl border border-gray-100 p-6">
+            <div className="bg-card rounded-xl border border-border p-6">
               <div className="flex items-center justify-between gap-4">
                 <div className="flex-1 min-w-0">
-                  <p className="font-medium text-gray-900">{t('settings.kdsEnabledToggle', { defaultValue: 'Kitchen Display System' })}</p>
-                  <p className="text-sm text-gray-500">{t('settings.kdsEnabledToggleHint', { defaultValue: 'Show the Kitchen Display and allow devices to pair over your network. Turn this off if this business doesn’t use a KDS.' })}</p>
+                  <p className="font-medium text-foreground">{t('settings.kdsEnabledToggle', { defaultValue: 'Kitchen Display System' })}</p>
+                  <p className="text-sm text-muted-foreground">{t('settings.kdsEnabledToggleHint', { defaultValue: 'Show the Kitchen Display and allow devices to pair over your network. Turn this off if this business doesn’t use a KDS.' })}</p>
                 </div>
                 <Toggle value={kdsEnabledSetting} onChange={(v) => { if (!savingKdsEnabled) saveKdsEnabled(v); }} />
               </div>
@@ -2382,18 +2386,18 @@ export default function SettingsPage() {
             </div>
 
             {!kdsEnabledSetting && (
-              <p className="text-sm text-gray-400 italic">
+              <p className="text-sm text-muted-foreground/70 italic">
                 {t('settings.kdsPairingHiddenHint', { defaultValue: 'Pairing is hidden while the Kitchen Display System is disabled.' })}
               </p>
             )}
 
             {kdsEnabledSetting && (
-            <div className="bg-white rounded-xl border border-gray-100 p-6">
+            <div className="bg-card rounded-xl border border-border p-6">
               <div className="flex items-center gap-2 mb-4">
-                <ChefHat size={20} className="text-gray-500" />
-                <h2 className="font-semibold text-gray-900">{t('settings.kds')}</h2>
+                <ChefHat size={20} className="text-muted-foreground" />
+                <h2 className="font-semibold text-foreground">{t('settings.kds')}</h2>
               </div>
-              <p className="text-sm text-gray-500 mb-5">
+              <p className="text-sm text-muted-foreground mb-5">
                 {t('settings.kdsPairingHint')}
               </p>
 
@@ -2409,15 +2413,15 @@ export default function SettingsPage() {
                     <>
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 w-full">
                         {kdsInfo.ips_data.map((ipInfo: { ip: string; url: string; qr_data: string | null }, idx: number) => (
-                          <div key={idx} className="flex flex-col items-center p-4 bg-gray-50 border border-gray-200 rounded-lg">
-                            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">
+                          <div key={idx} className="flex flex-col items-center p-4 bg-muted border border-border rounded-lg">
+                            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">
                               {ipInfo.ip.startsWith('100.') ? t('settings.vpnMeshNetwork') : t('settings.localNetwork')}
                             </p>
                             {ipInfo.qr_data ? (
-                              <img src={ipInfo.qr_data} alt={`QR Code for ${ipInfo.ip}`} className="w-40 h-40 rounded-lg mb-3 bg-white p-2 border border-gray-100" />
+                              <img src={ipInfo.qr_data} alt={`QR Code for ${ipInfo.ip}`} className="w-40 h-40 rounded-lg mb-3 bg-card p-2 border border-border" />
                             ) : (
-                              <div className="w-40 h-40 bg-gray-100 rounded-lg flex items-center justify-center mb-3">
-                                <QrCode size={40} className="text-gray-400" />
+                              <div className="w-40 h-40 bg-muted rounded-lg flex items-center justify-center mb-3">
+                                <QrCode size={40} className="text-muted-foreground/70" />
                               </div>
                             )}
                             <a href={ipInfo.url} target="_blank" rel="noopener noreferrer" className="text-xs font-mono text-brand hover:underline break-all text-center">
@@ -2444,23 +2448,23 @@ export default function SettingsPage() {
                     <div className="flex flex-col sm:flex-row gap-6 items-start">
                       <div className="shrink-0">
                         {kdsInfo.qr_data_url ? (
-                          <img src={kdsInfo.qr_data_url} alt={t('settings.kdsQrAlt')} className="w-48 h-48 rounded-xl border border-gray-200" />
+                          <img src={kdsInfo.qr_data_url} alt={t('settings.kdsQrAlt')} className="w-48 h-48 rounded-xl border border-border" />
                         ) : (
-                          <div className="w-48 h-48 rounded-xl border border-gray-200 flex items-center justify-center text-gray-400">
+                          <div className="w-48 h-48 rounded-xl border border-border flex items-center justify-center text-muted-foreground/70">
                             <QrCode size={48} />
                           </div>
                         )}
                       </div>
                       <div className="flex-1 space-y-4">
                         <div>
-                          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">{t('settings.directIp')}</p>
+                          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">{t('settings.directIp')}</p>
                           <a href={kdsInfo.ip_url} target="_blank" rel="noopener noreferrer" className="block font-mono text-sm text-brand break-all hover:underline">
                             {kdsInfo.ip_url}
                           </a>
                         </div>
                         <div>
-                          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">{t('settings.mdnsAlwaysStable')}</p>
-                          <a href={kdsInfo.mdns_url} target="_blank" rel="noopener noreferrer" className="block font-mono text-sm text-gray-700 break-all hover:underline">
+                          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">{t('settings.mdnsAlwaysStable')}</p>
+                          <a href={kdsInfo.mdns_url} target="_blank" rel="noopener noreferrer" className="block font-mono text-sm text-foreground break-all hover:underline">
                             {kdsInfo.mdns_url}
                           </a>
                         </div>
@@ -2468,9 +2472,9 @@ export default function SettingsPage() {
                     </div>
                   )}
 
-                  <div className="flex justify-end border-t border-gray-200 pt-4">
+                  <div className="flex justify-end border-t border-border pt-4">
                     <button onClick={fetchKdsInfo} disabled={kdsInfoLoading}
-                      className="flex items-center gap-2 text-sm text-gray-500 hover:text-gray-800">
+                      className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground">
                       <RefreshCw size={14} className={kdsInfoLoading ? 'animate-spin' : ''} />
                       {t('settings.refreshUrls')}
                     </button>
@@ -2480,7 +2484,7 @@ export default function SettingsPage() {
 
               {!kdsInfo && !kdsInfoLoading && (
                 <>
-                  <p className="text-sm text-gray-500 mb-3">
+                  <p className="text-sm text-muted-foreground mb-3">
                     {t('settings.kdsLoadHint', { defaultValue: 'Load connection details to pair kitchen display devices on your local network.' })}
                   </p>
                   <button onClick={fetchKdsInfo}
@@ -2492,11 +2496,11 @@ export default function SettingsPage() {
             </div>
             )}
 
-            <div className="bg-white rounded-xl border border-gray-100 p-6">
+            <div className="bg-card rounded-xl border border-border p-6">
               <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center gap-2">
-                  <ChefHat size={20} className="text-gray-500" />
-                  <h2 className="font-semibold text-gray-900">{t('settings.kitchenStations')}</h2>
+                  <ChefHat size={20} className="text-muted-foreground" />
+                  <h2 className="font-semibold text-foreground">{t('settings.kitchenStations')}</h2>
                 </div>
                 <button onClick={openAddStation}
                   className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-brand text-white rounded-lg hover:opacity-90 font-medium">
@@ -2504,10 +2508,10 @@ export default function SettingsPage() {
                   {t('settings.addStation')}
                 </button>
               </div>
-              <p className="text-sm text-gray-500 mb-5">{t('settings.kitchenStationsHint')}</p>
+              <p className="text-sm text-muted-foreground mb-5">{t('settings.kitchenStationsHint')}</p>
 
               {stations.length === 0 ? (
-                <p className="text-sm text-gray-400 py-4 text-center">{t('settings.noStationsYet')}</p>
+                <p className="text-sm text-muted-foreground/70 py-4 text-center">{t('settings.noStationsYet')}</p>
               ) : (
                 <div className="space-y-2">
                   {stations.map((station) => {
@@ -2519,10 +2523,10 @@ export default function SettingsPage() {
                     const printer = hwPrinters.find((p) => p.id === station.printer_id);
                     const users = stationUsersByStation[station.id] || [];
                     return (
-                      <div key={station.id} className="flex items-center justify-between p-3 border border-gray-100 rounded-lg">
+                      <div key={station.id} className="flex items-center justify-between p-3 border border-border rounded-lg">
                         <div className="min-w-0">
-                          <p className="font-medium text-gray-900">{station.name}</p>
-                          <p className="text-xs text-gray-500 mt-0.5">
+                          <p className="font-medium text-foreground">{station.name}</p>
+                          <p className="text-xs text-muted-foreground mt-0.5">
                             {categoryNames.length > 0 ? categoryNames.join(', ') : t('settings.stationNoCategories')}
                             {' · '}
                             {printer ? printer.name : t('settings.stationNoPrinter')}
@@ -2531,11 +2535,11 @@ export default function SettingsPage() {
                         </div>
                         <div className="flex items-center gap-1 shrink-0">
                           <button onClick={() => openEditStation(station)}
-                            className="px-2 py-1 text-xs text-gray-600 hover:text-gray-900 hover:bg-gray-50 rounded">
+                            className="px-2 py-1 text-xs text-muted-foreground hover:text-foreground hover:bg-muted rounded">
                             {t('common.edit')}
                           </button>
                           <button onClick={() => deleteStation(station.id)}
-                            className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded">
+                            className="p-1.5 text-muted-foreground/70 hover:text-red-600 hover:bg-red-50 rounded">
                             <Trash2 size={14} />
                           </button>
                         </div>
@@ -2554,24 +2558,24 @@ export default function SettingsPage() {
                     </DialogHeader>
                     <div className="space-y-4 py-2">
                       <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">{t('settings.stationName')}</label>
+                        <label className="block text-sm font-medium text-foreground mb-1">{t('settings.stationName')}</label>
                         <input type="text" value={stationForm.name}
                           onChange={(e) => setStationForm((f) => ({ ...f, name: e.target.value }))}
                           placeholder={t('settings.stationNamePlaceholder')}
-                          className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm" />
+                          className="w-full px-3 py-2 border border-border rounded-lg text-sm" />
                       </div>
 
                       <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">{t('settings.stationCategories')}</label>
+                        <label className="block text-sm font-medium text-foreground mb-1">{t('settings.stationCategories')}</label>
                         {stationCategories.length === 0 ? (
-                          <p className="text-xs text-gray-400">{t('settings.noCategoriesYet')}</p>
+                          <p className="text-xs text-muted-foreground/70">{t('settings.noCategoriesYet')}</p>
                         ) : (
                           <div className="flex flex-wrap gap-2 max-h-32 overflow-y-auto">
                             {stationCategories.map((cat) => (
-                              <label key={cat.id} className="flex items-center gap-1.5 px-2.5 py-1 border border-gray-200 rounded-full text-xs cursor-pointer hover:bg-gray-50">
+                              <label key={cat.id} className="flex items-center gap-1.5 px-2.5 py-1 border border-border rounded-full text-xs cursor-pointer hover:bg-muted">
                                 <input type="checkbox" checked={stationForm.category_ids.includes(cat.id)}
                                   onChange={() => toggleStationFormValue('category_ids', cat.id)}
-                                  className="rounded border-gray-300 text-brand focus:ring-brand" />
+                                  className="rounded border-input text-brand focus:ring-brand" />
                                 {cat.name}
                               </label>
                             ))}
@@ -2580,10 +2584,10 @@ export default function SettingsPage() {
                       </div>
 
                       <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">{t('settings.stationPrinter')}</label>
+                        <label className="block text-sm font-medium text-foreground mb-1">{t('settings.stationPrinter')}</label>
                         <select value={stationForm.printer_id}
                           onChange={(e) => setStationForm((f) => ({ ...f, printer_id: e.target.value }))}
-                          className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white">
+                          className="w-full px-3 py-2 border border-border rounded-lg text-sm bg-card">
                           <option value="">{t('settings.stationUseDefaultPrinter')}</option>
                           {hwPrinters.map((p) => (
                             <option key={p.id} value={p.id}>{p.name}</option>
@@ -2592,16 +2596,16 @@ export default function SettingsPage() {
                       </div>
 
                       <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">{t('settings.stationStaff')}</label>
+                        <label className="block text-sm font-medium text-foreground mb-1">{t('settings.stationStaff')}</label>
                         {stationStaff.length === 0 ? (
-                          <p className="text-xs text-gray-400">{t('settings.noStaffYet')}</p>
+                          <p className="text-xs text-muted-foreground/70">{t('settings.noStaffYet')}</p>
                         ) : (
                           <div className="flex flex-wrap gap-2 max-h-32 overflow-y-auto">
                             {stationStaff.map((u) => (
-                              <label key={u.id} className="flex items-center gap-1.5 px-2.5 py-1 border border-gray-200 rounded-full text-xs cursor-pointer hover:bg-gray-50">
+                              <label key={u.id} className="flex items-center gap-1.5 px-2.5 py-1 border border-border rounded-full text-xs cursor-pointer hover:bg-muted">
                                 <input type="checkbox" checked={stationForm.user_ids.includes(u.id)}
                                   onChange={() => toggleStationFormValue('user_ids', u.id)}
-                                  className="rounded border-gray-300 text-brand focus:ring-brand" />
+                                  className="rounded border-input text-brand focus:ring-brand" />
                                 {u.name}
                               </label>
                             ))}
@@ -2631,35 +2635,35 @@ export default function SettingsPage() {
         <TabsContent value="loyalty">
           <div className="pb-6 max-w-3xl space-y-6">
             {/* Loyalty */}
-            <div className="bg-white rounded-xl border border-gray-100 p-6">
+            <div className="bg-card rounded-xl border border-border p-6">
               <div className="flex items-center gap-2 mb-4">
-                <Gift size={20} className="text-gray-500" />
-                <h2 className="font-semibold text-gray-900">{t('settings.loyaltyProgram')}</h2>
+                <Gift size={20} className="text-muted-foreground" />
+                <h2 className="font-semibold text-foreground">{t('settings.loyaltyProgram')}</h2>
               </div>
               <div className="space-y-5">
                 {/* Enable toggle */}
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="font-medium text-gray-900">{t('settings.enableLoyalty')}</p>
-                    <p className="text-sm text-gray-500">{t('settings.loyaltyHint')}</p>
+                    <p className="font-medium text-foreground">{t('settings.enableLoyalty')}</p>
+                    <p className="text-sm text-muted-foreground">{t('settings.loyaltyHint')}</p>
                   </div>
                   <button
                     onClick={() => setLoyaltyEnabled(!loyaltyEnabled)}
                     className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                      loyaltyEnabled ? 'bg-brand' : 'bg-gray-200'
+                      loyaltyEnabled ? 'bg-brand' : 'bg-border'
                     }`}
                   >
-                    <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                    <span className={`inline-block h-4 w-4 transform rounded-full bg-card transition-transform ${
                       loyaltyEnabled ? 'translate-x-6' : 'translate-x-1'
                     }`} />
                   </button>
                 </div>
                 {/* Global Cashback Input */}
                 {loyaltyEnabled && (
-                  <div className="pt-4 border-t border-gray-100 flex items-center justify-between">
+                  <div className="pt-4 border-t border-border flex items-center justify-between">
                     <div>
-                      <p className="font-medium text-gray-900">{t('settings.globalLoyaltyRate')}</p>
-                      <p className="text-sm text-gray-500">{t('settings.globalLoyaltyRateHint')}</p>
+                      <p className="font-medium text-foreground">{t('settings.globalLoyaltyRate')}</p>
+                      <p className="text-sm text-muted-foreground">{t('settings.globalLoyaltyRateHint')}</p>
                     </div>
                     <div className="flex items-center gap-2">
                       <input
@@ -2670,9 +2674,9 @@ export default function SettingsPage() {
                         value={globalCashbackPercent}
                         onChange={(e) => setGlobalCashbackPercent(e.target.value)}
                         placeholder="0"
-                        className="w-20 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand focus:border-brand transition-shadow text-right"
+                        className="w-20 px-3 py-2 border border-input rounded-lg focus:ring-2 focus:ring-brand focus:border-brand transition-shadow text-right"
                       />
-                      <span className="text-gray-500 font-medium">%</span>
+                      <span className="text-muted-foreground font-medium">%</span>
                     </div>
                   </div>
                 )}
@@ -2680,16 +2684,16 @@ export default function SettingsPage() {
                     ("earns nothing"), so the global rate does nothing for them
                     until the owner explicitly opts them in. */}
                 {loyaltyEnabled && globalRateCandidates > 0 && (
-                  <div className="pt-4 border-t border-gray-100">
-                    <p className="font-medium text-gray-900">{t('settings.applyGlobalRateTitle')}</p>
-                    <p className="text-sm text-gray-500 mt-1">
+                  <div className="pt-4 border-t border-border">
+                    <p className="font-medium text-foreground">{t('settings.applyGlobalRateTitle')}</p>
+                    <p className="text-sm text-muted-foreground mt-1">
                       {t('settings.applyGlobalRateHint', { count: globalRateCandidates })}
                     </p>
                     <button
                       type="button"
                       onClick={applyGlobalRateToProducts}
                       disabled={applyingGlobalRate}
-                      className="mt-3 px-4 py-2 text-sm font-medium rounded-lg border border-gray-300 hover:bg-gray-50 disabled:opacity-50"
+                      className="mt-3 px-4 py-2 text-sm font-medium rounded-lg border border-input hover:bg-muted disabled:opacity-50"
                     >
                       {applyingGlobalRate
                         ? t('settings.applyGlobalRateWorking')
@@ -2705,19 +2709,19 @@ export default function SettingsPage() {
         <TabsContent value="discounts">
           <div className="pb-6 max-w-3xl space-y-6">
             {/* Discount Limits */}
-            <div className="bg-white rounded-xl border border-gray-100 p-6">
+            <div className="bg-card rounded-xl border border-border p-6">
               <div className="flex items-center gap-2 mb-4">
-                <Percent size={20} className="text-gray-500" />
-                <h2 className="font-semibold text-gray-900">{t('settings.discountLimits')}</h2>
+                <Percent size={20} className="text-muted-foreground" />
+                <h2 className="font-semibold text-foreground">{t('settings.discountLimits')}</h2>
               </div>
               <div className="space-y-5">
                 {/* Discount mode */}
                 <div>
-                  <p className="font-medium text-gray-900">{t('settings.discountMode')}</p>
-                  <p className="text-sm text-gray-500 mb-2">{t('settings.discountModeHint')}</p>
+                  <p className="font-medium text-foreground">{t('settings.discountMode')}</p>
+                  <p className="text-sm text-muted-foreground mb-2">{t('settings.discountModeHint')}</p>
                   <select value={discountMode}
                     onChange={(e) => setDiscountMode(e.target.value)}
-                    className="w-48 px-3 py-1.5 text-sm border border-gray-200 rounded-lg outline-none focus:ring-1 focus:ring-brand bg-white">
+                    className="w-48 px-3 py-1.5 text-sm border border-border rounded-lg outline-none focus:ring-1 focus:ring-brand bg-card">
                     <option value="both">{t('settings.discountBoth')}</option>
                     <option value="percentage">{t('settings.discountPercentageOnly')}</option>
                     <option value="flat">{t('settings.discountFlatOnly')}</option>
@@ -2726,42 +2730,42 @@ export default function SettingsPage() {
 
                 {(discountMode === 'percentage' || discountMode === 'both') && (
                   <div>
-                    <p className="font-medium text-gray-900">{t('settings.maxDiscountPercentage')}</p>
-                    <p className="text-sm text-gray-500 mb-2">{t('settings.maxDiscountPercentageHint')}</p>
+                    <p className="font-medium text-foreground">{t('settings.maxDiscountPercentage')}</p>
+                    <p className="text-sm text-muted-foreground mb-2">{t('settings.maxDiscountPercentageHint')}</p>
                     <div className="flex items-center gap-3">
                       <input type="number" min={1} max={100} value={discountMaxPct}
                         onChange={(e) => setDiscountMaxPct(normalizeDiscountPercentage(e.target.value))}
-                        className="w-24 px-3 py-1.5 text-sm border border-gray-200 rounded-lg outline-none focus:ring-1 focus:ring-brand" />
-                      <span className="text-sm text-gray-500">{t('settings.percentMaximum')}</span>
+                        className="w-24 px-3 py-1.5 text-sm border border-border rounded-lg outline-none focus:ring-1 focus:ring-brand" />
+                      <span className="text-sm text-muted-foreground">{t('settings.percentMaximum')}</span>
                     </div>
                   </div>
                 )}
 
                 {(discountMode === 'flat' || discountMode === 'both') && (
                   <div>
-                    <p className="font-medium text-gray-900">{t('settings.maxDiscountAmount')}</p>
-                    <p className="text-sm text-gray-500 mb-2">{t('settings.maxDiscountAmountHint')}</p>
+                    <p className="font-medium text-foreground">{t('settings.maxDiscountAmount')}</p>
+                    <p className="text-sm text-muted-foreground mb-2">{t('settings.maxDiscountAmountHint')}</p>
                     <div className="flex items-center gap-3">
                       <input type="number" min={0} max={999999} value={discountMaxAmount}
                         onChange={(e) => setDiscountMaxAmount(normalizeDiscountAmount(e.target.value))}
-                        className="w-24 px-3 py-1.5 text-sm border border-gray-200 rounded-lg outline-none focus:ring-1 focus:ring-brand" />
-                      <span className="text-sm text-gray-500">{t('settings.zeroNoLimit')}</span>
+                        className="w-24 px-3 py-1.5 text-sm border border-border rounded-lg outline-none focus:ring-1 focus:ring-brand" />
+                      <span className="text-sm text-muted-foreground">{t('settings.zeroNoLimit')}</span>
                     </div>
                   </div>
                 )}
 
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="font-medium text-gray-900">{t('settings.requireApproval')}</p>
-                    <p className="text-sm text-gray-500">{t('settings.requireApprovalHint')}</p>
+                    <p className="font-medium text-foreground">{t('settings.requireApproval')}</p>
+                    <p className="text-sm text-muted-foreground">{t('settings.requireApprovalHint')}</p>
                   </div>
                   <button
                     onClick={() => setDiscountRequiresApproval(!discountRequiresApproval)}
                     className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                      discountRequiresApproval ? 'bg-brand' : 'bg-gray-200'
+                      discountRequiresApproval ? 'bg-brand' : 'bg-border'
                     }`}
                   >
-                    <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                    <span className={`inline-block h-4 w-4 transform rounded-full bg-card transition-transform ${
                       discountRequiresApproval ? 'translate-x-6' : 'translate-x-1'
                     }`} />
                   </button>
@@ -2775,35 +2779,35 @@ export default function SettingsPage() {
         <TabsContent value="account">
           <div className="pb-6 max-w-3xl space-y-6">
             {/* Account */}
-            <div className="bg-white rounded-xl border border-gray-100 p-6">
-              <h2 className="font-semibold text-gray-900 mb-4">{t('settings.account')}</h2>
+            <div className="bg-card rounded-xl border border-border p-6">
+              <h2 className="font-semibold text-foreground mb-4">{t('settings.account')}</h2>
               <div className="space-y-3">
                 <div>
-                  <p className="text-sm text-gray-500">{t('settings.name')}</p>
-                  <p className="font-medium text-gray-900">{user?.name}</p>
+                  <p className="text-sm text-muted-foreground">{t('settings.name')}</p>
+                  <p className="font-medium text-foreground">{user?.name}</p>
                 </div>
                 <div>
-                  <p className="text-sm text-gray-500">{t('settings.email')}</p>
-                  <p className="font-medium text-gray-900">{user?.email}</p>
+                  <p className="text-sm text-muted-foreground">{t('settings.email')}</p>
+                  <p className="font-medium text-foreground">{user?.email}</p>
                 </div>
                 <div>
-                  <p className="text-sm text-gray-500">{t('settings.role')}</p>
-                  <p className="font-medium text-gray-900 capitalize">{currentTenant?.role || '—'}</p>
+                  <p className="text-sm text-muted-foreground">{t('settings.role')}</p>
+                  <p className="font-medium text-foreground capitalize">{currentTenant?.role || '—'}</p>
                 </div>
               </div>
             </div>
             {currentTenant?.role === 'owner' && (
-              <div className={`rounded-xl border p-6 ${cloudAccount?.email && !cloudAccount.verified ? 'border-red-200 bg-red-50/40' : 'border-gray-100 bg-white'}`}>
+              <div className={`rounded-xl border p-6 ${cloudAccount?.email && !cloudAccount.verified ? 'border-red-200 bg-red-50/40' : 'border-border bg-card'}`}>
                 <div className="flex items-start justify-between gap-4">
                   <div>
-                    <h2 className="font-semibold text-gray-900">Contact email</h2>
-                    <p className="mt-1 text-sm text-gray-600">{cloudAccount?.email || user?.email || 'No cloud contact email'}</p>
+                    <h2 className="font-semibold text-foreground">Contact email</h2>
+                    <p className="mt-1 text-sm text-muted-foreground">{cloudAccount?.email || user?.email || 'No cloud contact email'}</p>
                   </div>
                   <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${cloudAccount?.verified ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
                     {cloudAccount?.verified ? 'Verified' : 'Pending verification'}
                   </span>
                 </div>
-                <p className="mt-3 text-sm text-gray-600">Verification is important for product service notices, security updates, and other account communication.</p>
+                <p className="mt-3 text-sm text-muted-foreground">Verification is important for product service notices, security updates, and other account communication.</p>
                 {!cloudAccount?.verified && (
                   <Button className="mt-4" disabled={cloudAccountBusy} onClick={async () => {
                     setCloudAccountBusy(true);
@@ -2815,10 +2819,10 @@ export default function SettingsPage() {
                     finally { setCloudAccountBusy(false); }
                   }}>{cloudAccountBusy ? 'Sending…' : 'Send verification email'}</Button>
                 )}
-                <div className="mt-5 space-y-3 border-t border-gray-200 pt-4">
+                <div className="mt-5 space-y-3 border-t border-border pt-4">
                   <label className="flex items-center justify-between gap-4 text-sm"><span>Product updates and release notes</span><Toggle value={Boolean(cloudAccount?.product_updates)} onChange={async (value) => { setCloudAccountBusy(true); try { const { data } = await api.put('/settings/cloud/account/preferences', { product_updates: value }); setCloudAccount(data); } catch { toast.error('Could not save preference'); } finally { setCloudAccountBusy(false); } }} /></label>
                   <label className="flex items-center justify-between gap-4 text-sm"><span>Marketing messages, offers, and surveys</span><Toggle value={Boolean(cloudAccount?.marketing)} onChange={async (value) => { setCloudAccountBusy(true); try { const { data } = await api.put('/settings/cloud/account/preferences', { marketing: value }); setCloudAccount(data); } catch { toast.error('Could not save preference'); } finally { setCloudAccountBusy(false); } }} /></label>
-                  <p className="text-xs text-gray-500">Essential service and security notices are separate from these optional subscriptions.</p>
+                  <p className="text-xs text-muted-foreground">Essential service and security notices are separate from these optional subscriptions.</p>
                 </div>
               </div>
             )}
@@ -2828,11 +2832,11 @@ export default function SettingsPage() {
         {/* Privacy — anonymous telemetry (from the old Integrations tab) + cloud privacy controls (from Account) */}
         <TabsContent value="privacy">
           <div className="pb-6 max-w-3xl space-y-6">
-            <div className="bg-white rounded-xl border border-gray-100 p-6 space-y-4">
+            <div className="bg-card rounded-xl border border-border p-6 space-y-4">
               <div className="flex items-center gap-2">
-                <Lock size={20} className="text-gray-500" />
+                <Lock size={20} className="text-muted-foreground" />
                 <div>
-                  <h2 className="font-semibold text-gray-900">{t('settings.privacy')}</h2>
+                  <h2 className="font-semibold text-foreground">{t('settings.privacy')}</h2>
                 </div>
               </div>
 
@@ -2842,33 +2846,33 @@ export default function SettingsPage() {
                   checked={telemetryEnabled}
                   disabled={savingTelemetry}
                   onChange={(e) => saveTelemetry(e.target.checked)}
-                  className="rounded border-gray-300 text-brand focus:ring-brand"
+                  className="rounded border-input text-brand focus:ring-brand"
                 />
-                <span className="text-sm text-gray-700">{t('settings.anonymousTelemetry')}</span>
+                <span className="text-sm text-foreground">{t('settings.anonymousTelemetry')}</span>
               </label>
-              <p className="text-xs text-gray-500">{t('settings.anonymousTelemetryHint')}</p>
+              <p className="text-xs text-muted-foreground">{t('settings.anonymousTelemetryHint')}</p>
 
-              <div className="border-t border-gray-100 pt-4">
+              <div className="border-t border-border pt-4">
                 <label className="flex items-center gap-3 cursor-pointer">
                   <input
                     type="checkbox"
                     checked={diagnosticsConsent}
                     disabled={savingDiagnosticsConsent}
                     onChange={(e) => saveDiagnosticsConsent(e.target.checked)}
-                    className="rounded border-gray-300 text-brand focus:ring-brand"
+                    className="rounded border-input text-brand focus:ring-brand"
                   />
-                  <span className="text-sm text-gray-700">{t('settings.storeDiagnostics')}</span>
+                  <span className="text-sm text-foreground">{t('settings.storeDiagnostics')}</span>
                 </label>
-                <p className="text-xs text-gray-500 mt-1">{t('settings.storeDiagnosticsHint')}</p>
+                <p className="text-xs text-muted-foreground mt-1">{t('settings.storeDiagnosticsHint')}</p>
               </div>
             </div>
 
             {currentTenant?.role === 'owner' && (
-              <div className="rounded-xl border border-gray-100 bg-white p-6">
-                <h2 className="font-semibold text-gray-900">Cloud privacy controls</h2>
-                <p className="mt-2 text-sm text-gray-600">Stopping cloud services is reversible. A cloud deletion request is reviewed manually in FloAdmin before data is permanently removed. Neither action deletes your local orders, bills, customers, products, or database.</p>
+              <div className="rounded-xl border border-border bg-card p-6">
+                <h2 className="font-semibold text-foreground">Cloud privacy controls</h2>
+                <p className="mt-2 text-sm text-muted-foreground">Stopping cloud services is reversible. A cloud deletion request is reviewed manually in FloAdmin before data is permanently removed. Neither action deletes your local orders, bills, customers, products, or database.</p>
                 {cloudAccount?.deletion_request && (
-                  <div className={`mt-4 rounded-lg border p-3 text-sm ${cloudAccount.deletion_request.status === 'pending' ? 'border-amber-200 bg-amber-50 text-amber-900' : cloudAccount.deletion_request.status === 'approved' ? 'border-green-200 bg-green-50 text-green-800' : 'border-gray-200 bg-gray-50 text-gray-700'}`}>
+                  <div className={`mt-4 rounded-lg border p-3 text-sm ${cloudAccount.deletion_request.status === 'pending' ? 'border-amber-200 bg-amber-50 text-amber-900' : cloudAccount.deletion_request.status === 'approved' ? 'border-green-200 bg-green-50 text-green-800' : 'border-border bg-muted text-foreground'}`}>
                     <p className="font-semibold">Deletion request: {cloudAccount.deletion_request.status}</p>
                     {cloudAccount.deletion_request.id && <p className="mt-1 font-mono text-xs">{cloudAccount.deletion_request.id}</p>}
                     {cloudAccount.deletion_request.decision_note && <p className="mt-2">{cloudAccount.deletion_request.decision_note}</p>}
@@ -2889,7 +2893,7 @@ export default function SettingsPage() {
                     <Button variant="outline" onClick={() => setPinGate({ mode: 'cancel-cloud-deletion' })}>Cancel deletion request</Button>
                   )}
                 </div>
-                <p className="mt-3 text-xs text-gray-500">Anonymous telemetry has no store or email link, so existing anonymous events cannot be identified as yours. This action stops future telemetry and rotates the anonymous identifier.</p>
+                <p className="mt-3 text-xs text-muted-foreground">Anonymous telemetry has no store or email link, so existing anonymous events cannot be identified as yours. This action stops future telemetry and rotates the anonymous identifier.</p>
               </div>
             )}
           </div>
@@ -2899,21 +2903,21 @@ export default function SettingsPage() {
         <TabsContent value="receipts-printers">
           <div className="pb-6 max-w-3xl space-y-6">
             <div className="space-y-6">
-            <div className="bg-white rounded-xl border border-gray-100 p-6">
+            <div className="bg-card rounded-xl border border-border p-6">
               <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center gap-2">
-                  <Printer size={20} className="text-gray-500" />
-                  <h2 className="font-semibold text-gray-900">{t('settings.printers')}</h2>
+                  <Printer size={20} className="text-muted-foreground" />
+                  <h2 className="font-semibold text-foreground">{t('settings.printers')}</h2>
                 </div>
                 {!showPrinterForm && (
                   <div className="flex items-center gap-2">
                     <button onClick={fetchDetectedPrinters} disabled={detectingPrinters}
                       title={t('settings.refreshList')}
-                      className="flex items-center gap-2 px-3 py-2 text-sm border border-gray-200 text-gray-600 rounded-lg hover:bg-gray-50 font-medium disabled:opacity-50">
+                      className="flex items-center gap-2 px-3 py-2 text-sm border border-border text-muted-foreground rounded-lg hover:bg-muted font-medium disabled:opacity-50">
                       <RefreshCw size={14} className={detectingPrinters ? 'animate-spin' : ''} /> {t('settings.refresh')}
                     </button>
                     <button onClick={openAddPrinter}
-                      className="flex items-center gap-2 px-4 py-2 text-sm border border-gray-200 text-gray-600 rounded-lg hover:bg-gray-50 font-medium">
+                      className="flex items-center gap-2 px-4 py-2 text-sm border border-border text-muted-foreground rounded-lg hover:bg-muted font-medium">
                       <Plus size={14} /> {t('settings.addPrinterManually')}
                     </button>
                   </div>
@@ -2923,11 +2927,11 @@ export default function SettingsPage() {
               {/* Detected (OS-installed) printers — one-click add */}
               {!showPrinterForm && (
                 <div className="mb-5">
-                  <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-2">{t('settings.installedOnThisComputer')}</h3>
+                  <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-2">{t('settings.installedOnThisComputer')}</h3>
                   {detectingPrinters && detectedPrinters.length === 0 ? (
-                    <div className="py-6 text-center text-gray-400 text-sm">{t('settings.scanningForPrinters')}</div>
+                    <div className="py-6 text-center text-muted-foreground/70 text-sm">{t('settings.scanningForPrinters')}</div>
                   ) : detectedPrinters.length === 0 ? (
-                    <div className="py-6 text-center text-gray-400 text-sm border border-dashed border-gray-200 rounded-lg">
+                    <div className="py-6 text-center text-muted-foreground/70 text-sm border border-dashed border-border rounded-lg">
                       {t('settings.noInstalledPrinters')}
                     </div>
                   ) : (
@@ -2935,22 +2939,22 @@ export default function SettingsPage() {
                       {detectedPrinters.map((p) => {
                         const alreadyAdded = hwPrinters.some((h) => h.name.toLowerCase() === p.name.toLowerCase());
                         const isAdding = addingDetectedName === p.name;
-                        const dotColor = p.status === 'idle' ? 'bg-green-500' : p.status === 'printing' ? 'bg-yellow-500' : 'bg-gray-300';
+                        const dotColor = p.status === 'idle' ? 'bg-green-500' : p.status === 'printing' ? 'bg-yellow-500' : 'bg-border';
                         const statusLabel = p.status === 'idle' ? t('settings.printerOnline') : p.status === 'printing' ? t('settings.printerPrinting') : t('settings.printerOffline');
                         return (
-                          <div key={p.name} className="flex items-center gap-3 rounded-xl border border-gray-200 p-3">
-                            <div className="w-9 h-9 rounded-lg flex items-center justify-center bg-gray-100 shrink-0">
-                              {p.connectionType === 'network' ? <Wifi size={18} className="text-gray-500" /> : <Usb size={18} className="text-gray-500" />}
+                          <div key={p.name} className="flex items-center gap-3 rounded-xl border border-border p-3">
+                            <div className="w-9 h-9 rounded-lg flex items-center justify-center bg-muted shrink-0">
+                              {p.connectionType === 'network' ? <Wifi size={18} className="text-muted-foreground" /> : <Usb size={18} className="text-muted-foreground" />}
                             </div>
                             <div className="flex-1 min-w-0">
                               <div className="flex items-center gap-2">
-                                <span className="font-medium text-gray-900 text-sm truncate">{p.name}</span>
-                                <span className="flex items-center gap-1 text-[11px] text-gray-500">
+                                <span className="font-medium text-foreground text-sm truncate">{p.name}</span>
+                                <span className="flex items-center gap-1 text-[11px] text-muted-foreground">
                                   <span className={`w-1.5 h-1.5 rounded-full ${dotColor}`} />
                                   {statusLabel}
                                 </span>
                               </div>
-                              <p className="text-xs text-gray-500 mt-0.5 truncate">
+                              <p className="text-xs text-muted-foreground mt-0.5 truncate">
                                 {p.make !== 'Unknown' ? `${p.make} ${p.model}` : p.model}
                                 {p.connectionType === 'network' && p.ipAddress ? ` · ${p.ipAddress}${p.port ? ':' + p.port : ''}` : ''}
                                 {p.paperWidth ? ` · ${p.paperWidth}` : ''}
@@ -2958,7 +2962,7 @@ export default function SettingsPage() {
                               </p>
                             </div>
                             {alreadyAdded ? (
-                              <span className="text-xs text-gray-400 px-3 py-1.5 flex items-center gap-1">
+                              <span className="text-xs text-muted-foreground/70 px-3 py-1.5 flex items-center gap-1">
                                 <CheckCircle2 size={14} className="text-green-500" /> {t('settings.printerAdded')}
                               </span>
                             ) : (
@@ -2977,31 +2981,31 @@ export default function SettingsPage() {
 
               {/* Configured printer list */}
               {hwPrinters.length === 0 && !showPrinterForm && (
-                <div className="py-6 text-center text-gray-400">
+                <div className="py-6 text-center text-muted-foreground/70">
                   <p className="text-sm">{t('settings.noPrintersConfigured')}</p>
                   <p className="text-xs mt-1">{t('settings.printerHint')}</p>
                 </div>
               )}
 
               {hwPrinters.length > 0 && !showPrinterForm && (
-                <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-2">{t('settings.configuredPrinters')}</h3>
+                <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-2">{t('settings.configuredPrinters')}</h3>
               )}
               <div className="space-y-3">
                 {hwPrinters.map((p) => (
-                  <div key={p.id} className={`flex items-center gap-3 rounded-xl border p-4 ${p.is_default ? 'border-brand bg-brand/5' : 'border-gray-200'}`}>
-                    <div className="w-9 h-9 rounded-lg flex items-center justify-center bg-gray-100 shrink-0">
-                      {p.connection_type === 'network' ? <Wifi size={18} className="text-gray-500" /> :
+                  <div key={p.id} className={`flex items-center gap-3 rounded-xl border p-4 ${p.is_default ? 'border-brand bg-brand/5' : 'border-border'}`}>
+                    <div className="w-9 h-9 rounded-lg flex items-center justify-center bg-muted shrink-0">
+                      {p.connection_type === 'network' ? <Wifi size={18} className="text-muted-foreground" /> :
                        p.connection_type === 'webusb' ? <Usb size={18} className="text-blue-500" /> :
-                       <Usb size={18} className="text-gray-500" />}
+                       <Usb size={18} className="text-muted-foreground" />}
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2">
-                        <span className="font-semibold text-gray-900 text-sm">{p.name}</span>
+                        <span className="font-semibold text-foreground text-sm">{p.name}</span>
                         {p.is_default === 1 && (
                           <span className="text-[10px] bg-brand/10 text-brand px-2 py-0.5 rounded-full font-medium">{t('settings.defaultPrinter')}</span>
                         )}
                       </div>
-                      <p className="text-xs text-gray-500 mt-0.5">
+                      <p className="text-xs text-muted-foreground mt-0.5">
                         {p.connection_type === 'network' ? `${p.ip_address}:${p.port}` :
                          p.connection_type === 'usb' ? (p.usb_device_path || '/dev/usb/lp0') :
                          t('settings.browserWebusb')}
@@ -3012,21 +3016,21 @@ export default function SettingsPage() {
                     <div className="flex items-center gap-1 shrink-0">
                       <button onClick={() => testPrinterHw(p)} disabled={testingPrinterId === p.id}
                         title={t('settings.testPrint')}
-                        className="p-2 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-gray-700 disabled:opacity-40">
+                        className="p-2 rounded-lg hover:bg-muted text-muted-foreground/70 hover:text-foreground disabled:opacity-40">
                         <TestTube2 size={15} />
                       </button>
                       {p.is_default !== 1 && (
                         <button onClick={() => setDefaultPrinter(p.id)} title={t('settings.setAsDefault')}
-                          className="p-2 rounded-lg hover:bg-yellow-50 text-gray-400 hover:text-yellow-600">
+                          className="p-2 rounded-lg hover:bg-yellow-50 text-muted-foreground/70 hover:text-yellow-600">
                           <Star size={15} />
                         </button>
                       )}
                       <button onClick={() => openEditPrinter(p)} title={t('settings.edit')}
-                        className="p-2 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-gray-700">
+                        className="p-2 rounded-lg hover:bg-muted text-muted-foreground/70 hover:text-foreground">
                         <Settings size={15} />
                       </button>
                       <button onClick={() => deletePrinterHw(p.id)} title={t('settings.delete')}
-                        className="p-2 rounded-lg hover:bg-red-50 text-gray-400 hover:text-red-600">
+                        className="p-2 rounded-lg hover:bg-red-50 text-muted-foreground/70 hover:text-red-600">
                         <Trash2 size={15} />
                       </button>
                     </div>
@@ -3036,23 +3040,23 @@ export default function SettingsPage() {
 
               {/* Add / Edit form */}
               {showPrinterForm && (
-                <div className="mt-5 pt-5 border-t border-gray-100">
-                  <h3 className="font-semibold text-gray-900 text-sm mb-4">
+                <div className="mt-5 pt-5 border-t border-border">
+                  <h3 className="font-semibold text-foreground text-sm mb-4">
                     {editingPrinterId ? t('settings.editPrinter') : t('settings.addPrinter')}
                   </h3>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-xs text-gray-500 mb-1">{t('settings.printerName')}</label>
+                      <label className="block text-xs text-muted-foreground mb-1">{t('settings.printerName')}</label>
                       <input type="text" value={printerForm.name}
                         onChange={(e) => setPrinterForm((p) => ({ ...p, name: e.target.value }))}
                         placeholder={t('settings.printerNamePlaceholder')}
-                        className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg outline-none focus:ring-2 focus:ring-brand" />
+                        className="w-full px-3 py-2 text-sm border border-border rounded-lg outline-none focus:ring-2 focus:ring-brand" />
                     </div>
                     <div>
-                      <label className="block text-xs text-gray-500 mb-1">{t('settings.connectionType')}</label>
+                      <label className="block text-xs text-muted-foreground mb-1">{t('settings.connectionType')}</label>
                       <select value={printerForm.connection_type}
                         onChange={(e) => setPrinterForm((p) => ({ ...p, connection_type: e.target.value as HwPrinter['connection_type'] }))}
-                        className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg outline-none focus:ring-2 focus:ring-brand">
+                        className="w-full px-3 py-2 text-sm border border-border rounded-lg outline-none focus:ring-2 focus:ring-brand">
                         <option value="network">{t('settings.connectionNetwork')}</option>
                         <option value="usb">{t('settings.connectionUsb')}</option>
                         <option value="webusb">{t('settings.connectionWebusb')}</option>
@@ -3061,29 +3065,29 @@ export default function SettingsPage() {
 
                     {printerForm.connection_type === 'network' && (<>
                       <div>
-                        <label className="block text-xs text-gray-500 mb-1">{t('settings.ipAddress')}</label>
+                        <label className="block text-xs text-muted-foreground mb-1">{t('settings.ipAddress')}</label>
                         <input type="text" value={printerForm.ip_address}
                           onChange={(e) => setPrinterForm((p) => ({ ...p, ip_address: e.target.value }))}
                           placeholder={t('settings.ipAddressPlaceholder')}
-                          className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg outline-none focus:ring-2 focus:ring-brand" />
+                          className="w-full px-3 py-2 text-sm border border-border rounded-lg outline-none focus:ring-2 focus:ring-brand" />
                       </div>
                       <div>
-                        <label className="block text-xs text-gray-500 mb-1">{t('settings.port')}</label>
+                        <label className="block text-xs text-muted-foreground mb-1">{t('settings.port')}</label>
                         <input type="number" value={printerForm.port}
                           onChange={(e) => setPrinterForm((p) => ({ ...p, port: e.target.value }))}
                           placeholder={t('settings.portPlaceholder')}
-                          className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg outline-none focus:ring-2 focus:ring-brand" />
+                          className="w-full px-3 py-2 text-sm border border-border rounded-lg outline-none focus:ring-2 focus:ring-brand" />
                       </div>
                     </>)}
 
                     {printerForm.connection_type === 'usb' && (
                       <div className="md:col-span-2">
-                        <label className="block text-xs text-gray-500 mb-1">{t('settings.usbDevicePath')}</label>
+                        <label className="block text-xs text-muted-foreground mb-1">{t('settings.usbDevicePath')}</label>
                         <input type="text" value={printerForm.usb_device_path}
                           onChange={(e) => setPrinterForm((p) => ({ ...p, usb_device_path: e.target.value }))}
                           placeholder={t('settings.usbDevicePathPlaceholder')}
-                          className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg outline-none focus:ring-2 focus:ring-brand" />
-                        <p className="text-xs text-gray-400 mt-1">{t('settings.usbDevicePathHint')}</p>
+                          className="w-full px-3 py-2 text-sm border border-border rounded-lg outline-none focus:ring-2 focus:ring-brand" />
+                        <p className="text-xs text-muted-foreground/70 mt-1">{t('settings.usbDevicePathHint')}</p>
                       </div>
                     )}
 
@@ -3094,10 +3098,10 @@ export default function SettingsPage() {
                     )}
 
                     <div>
-                      <label className="block text-xs text-gray-500 mb-1">{t('settings.paperWidth')}</label>
+                      <label className="block text-xs text-muted-foreground mb-1">{t('settings.paperWidth')}</label>
                       <select value={printerForm.paper_width}
                         onChange={(e) => setPrinterForm((p) => ({ ...p, paper_width: e.target.value }))}
-                        className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg outline-none focus:ring-2 focus:ring-brand">
+                        className="w-full px-3 py-2 text-sm border border-border rounded-lg outline-none focus:ring-2 focus:ring-brand">
                         <option value="58mm">{t('settings.paperWidth58')}</option>
                         <option value="80mm">{t('settings.paperWidth80')}</option>
                       </select>
@@ -3110,7 +3114,7 @@ export default function SettingsPage() {
                       {savingPrinter ? t('settings.saving') : editingPrinterId ? t('common.update') : t('settings.addPrinter')}
                     </button>
                     <button onClick={() => setShowPrinterForm(false)}
-                      className="px-5 py-2 text-sm border border-gray-200 text-gray-600 rounded-lg hover:bg-gray-50 font-medium">
+                      className="px-5 py-2 text-sm border border-border text-muted-foreground rounded-lg hover:bg-muted font-medium">
                       {t('settings.cancel')}
                     </button>
                   </div>
@@ -3123,17 +3127,17 @@ export default function SettingsPage() {
             </div>
 
             {/* Print Options — merged into the same Printers page rather than a separate tab */}
-            <div className="pt-4 border-t border-gray-100">
-              <h2 className="text-sm font-semibold uppercase tracking-wide text-gray-400">{t('settings.tabPrinting')}</h2>
+            <div className="pt-4 border-t border-border">
+              <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground/70">{t('settings.tabPrinting')}</h2>
             </div>
 
             {/* KOT printing on/off (issue #133) — coarser than Auto-print KOT
                 below: when this is off, no KOT ever prints, automatic or manual. */}
-            <div className="bg-white rounded-xl border border-gray-100 p-6">
+            <div className="bg-card rounded-xl border border-border p-6">
               <div className="flex items-center justify-between gap-4">
                 <div className="flex-1 min-w-0">
-                  <p className="font-medium text-gray-900">{t('settings.kotPrintingEnabledToggle', { defaultValue: 'KOT Ticket Printing' })}</p>
-                  <p className="text-sm text-gray-500">{t('settings.kotPrintingEnabledToggleHint', { defaultValue: 'Allow KOT tickets to print at all, automatically or manually. Turn this off if this business doesn’t use a KOT printer.' })}</p>
+                  <p className="font-medium text-foreground">{t('settings.kotPrintingEnabledToggle', { defaultValue: 'KOT Ticket Printing' })}</p>
+                  <p className="text-sm text-muted-foreground">{t('settings.kotPrintingEnabledToggleHint', { defaultValue: 'Allow KOT tickets to print at all, automatically or manually. Turn this off if this business doesn’t use a KOT printer.' })}</p>
                 </div>
                 <Toggle value={kotPrintingEnabledSetting} onChange={(v) => { if (!savingKotPrintingEnabled) saveKotPrintingEnabled(v); }} />
               </div>
@@ -3147,38 +3151,38 @@ export default function SettingsPage() {
               )}
             </div>
 
-            <div className="bg-white rounded-xl border border-gray-100 p-6">
+            <div className="bg-card rounded-xl border border-border p-6">
               <div className="flex items-center gap-2 mb-4">
-                <Printer size={20} className="text-gray-500" />
-                <h2 className="font-semibold text-gray-900">{t('settings.printing')}</h2>
+                <Printer size={20} className="text-muted-foreground" />
+                <h2 className="font-semibold text-foreground">{t('settings.printing')}</h2>
               </div>
               <div className="space-y-4">
                 <div className="flex items-center justify-between gap-4">
                   <div className="flex-1 min-w-0">
-                    <p className="font-medium text-gray-900">{t('settings.enablePrinter')}</p>
-                    <p className="text-sm text-gray-500">{t('settings.enablePrinterHint')}</p>
+                    <p className="font-medium text-foreground">{t('settings.enablePrinter')}</p>
+                    <p className="text-sm text-muted-foreground">{t('settings.enablePrinterHint')}</p>
                   </div>
                   <Toggle value={printingForm.printerEnabled} onChange={(v) => setPrintingForm((p) => ({ ...p, printerEnabled: v }))} />
                 </div>
                 <div>
-                  <p className="font-medium text-gray-900 mb-2">{t('settings.paperSize')}</p>
+                  <p className="font-medium text-foreground mb-2">{t('settings.paperSize')}</p>
                   <select value={printingForm.printerPaperSize}
                     onChange={(e) => setPrintingForm((p) => ({ ...p, printerPaperSize: e.target.value as PaperSize }))}
-                    className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg outline-none focus:ring-2 focus:ring-brand">
+                    className="w-full px-3 py-2 text-sm border border-border rounded-lg outline-none focus:ring-2 focus:ring-brand">
                     {paperSizeOptions.map((opt) => (
                       <option key={opt.value} value={opt.value}>{opt.label}</option>
                     ))}
                   </select>
                 </div>
                 <div>
-                  <p className="font-medium text-gray-900 mb-2">{t('settings.printMethod')}</p>
+                  <p className="font-medium text-foreground mb-2">{t('settings.printMethod')}</p>
                   <select value={printingForm.printMethod}
                     onChange={(e) => setPrintingForm((p) => ({ ...p, printMethod: e.target.value as 'escpos' | 'browser' }))}
-                    className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg outline-none focus:ring-2 focus:ring-brand">
+                    className="w-full px-3 py-2 text-sm border border-border rounded-lg outline-none focus:ring-2 focus:ring-brand">
                     <option value="escpos">{t('settings.printMethodEscpos')}</option>
                     <option value="browser">{t('settings.printMethodBrowser')}</option>
                   </select>
-                  <p className="text-xs text-gray-500 mt-1">
+                  <p className="text-xs text-muted-foreground mt-1">
                     {printingForm.printMethod === 'escpos'
                       ? t('settings.printMethodEscposHint')
                       : t('settings.printMethodBrowserHint')}
@@ -3186,8 +3190,8 @@ export default function SettingsPage() {
                 </div>
                 <div className={`flex items-center justify-between gap-4 ${!kotPrintingEnabledSetting ? 'opacity-50' : ''}`}>
                   <div className="flex-1 min-w-0">
-                    <p className="font-medium text-gray-900">{t('settings.autoPrintKot')}</p>
-                    <p className="text-sm text-gray-500">
+                    <p className="font-medium text-foreground">{t('settings.autoPrintKot')}</p>
+                    <p className="text-sm text-muted-foreground">
                       {kotPrintingEnabledSetting
                         ? t('settings.autoPrintKotHint')
                         : t('settings.autoPrintKotDisabledHint', { defaultValue: 'KOT printing is turned off above, so this has no effect.' })}
@@ -3200,41 +3204,42 @@ export default function SettingsPage() {
                 </div>
                 <div className="flex items-center justify-between gap-4">
                   <div className="flex-1 min-w-0">
-                    <p className="font-medium text-gray-900">{t('settings.autoPrintBill')}</p>
-                    <p className="text-sm text-gray-500">{t('settings.autoPrintBillHint')}</p>
+                    <p className="font-medium text-foreground">{t('settings.autoPrintBill')}</p>
+                    <p className="text-sm text-muted-foreground">{t('settings.autoPrintBillHint')}</p>
                   </div>
                   <Toggle value={printingForm.autoPrintBill} onChange={(v) => setPrintingForm((p) => ({ ...p, autoPrintBill: v }))} />
                 </div>
                 <div className="flex items-center justify-between gap-4">
                   <div className="flex-1 min-w-0">
-                    <p className="font-medium text-gray-900">{t('settings.printerUnicode')}</p>
-                    <p className="text-sm text-gray-500">
+                    <p className="font-medium text-foreground">{t('settings.printerUnicode')}</p>
+                    <p className="text-sm text-muted-foreground">
                       {t('settings.printerUnicodeHint')}
                     </p>
                   </div>
                   <Toggle value={printingForm.printerUseUnicode} onChange={(v) => setPrintingForm((p) => ({ ...p, printerUseUnicode: v }))} />
                 </div>
                 <div>
-                  <p className="font-medium text-gray-900 mb-2">{t('settings.webPrintSize')}</p>
+                  <p className="font-medium text-foreground mb-2">{t('settings.webPrintSize')}</p>
                   <select value={printingForm.webPrintSize}
                     onChange={(e) => setPrintingForm((p) => ({ ...p, webPrintSize: e.target.value as PaperSize }))}
-                    className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg outline-none focus:ring-2 focus:ring-brand">
+                    className="w-full px-3 py-2 text-sm border border-border rounded-lg outline-none focus:ring-2 focus:ring-brand">
                     <option value="thermal58">{t('settings.paperSize58')}</option>
                     <option value="thermal80">{t('settings.paperSize80')}</option>
+                    <option value="a5">{t('settings.paperSizeA5')}</option>
                   </select>
                 </div>
               </div>
             </div>
 
-            <div className="bg-white rounded-xl border border-gray-100 p-6">
+            <div className="bg-card rounded-xl border border-border p-6">
               <div className="flex items-center gap-2 mb-4">
-                <Share2 size={20} className="text-gray-500" />
-                <h2 className="font-semibold text-gray-900">{t('settings.whatsappSharing')}</h2>
+                <Share2 size={20} className="text-muted-foreground" />
+                <h2 className="font-semibold text-foreground">{t('settings.whatsappSharing')}</h2>
               </div>
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="font-medium text-gray-900">{t('settings.enableWhatsappShare')}</p>
-                  <p className="text-sm text-gray-500">{t('settings.enableWhatsappShareHint')}</p>
+                  <p className="font-medium text-foreground">{t('settings.enableWhatsappShare')}</p>
+                  <p className="text-sm text-muted-foreground">{t('settings.enableWhatsappShareHint')}</p>
                 </div>
                 <Toggle value={printingForm.whatsappShareEnabled} onChange={(v) => setPrintingForm((p) => ({ ...p, whatsappShareEnabled: v }))} />
               </div>
@@ -3242,10 +3247,10 @@ export default function SettingsPage() {
           </div>
 
             <div className="space-y-6">
-            <div className="bg-white rounded-xl border border-gray-100 p-6">
+            <div className="bg-card rounded-xl border border-border p-6">
               <div className="flex items-center gap-2 mb-4">
-                <FileText size={20} className="text-gray-500" />
-                <h2 className="font-semibold text-gray-900">{t('settings.billTemplate')}</h2>
+                <FileText size={20} className="text-muted-foreground" />
+                <h2 className="font-semibold text-foreground">{t('settings.billTemplate')}</h2>
               </div>
               <div className="grid grid-cols-1 gap-4">
                 {TEMPLATE_CARDS.map((card) => {
@@ -3253,13 +3258,13 @@ export default function SettingsPage() {
                   return (
                     <button key={card.id} onClick={() => setBillForm((p) => ({ ...p, billTemplate: card.id }))}
                       className={`text-left rounded-xl border-2 p-4 transition-all ${
-                        isSelected ? 'border-brand bg-brand/5' : 'border-gray-200 hover:border-gray-300 bg-white'
+                        isSelected ? 'border-brand bg-brand/5' : 'border-border hover:border-input bg-card'
                       }`}>
-                      <p className="font-semibold text-gray-900 mb-2">{t(card.nameKey)}</p>
-                      <pre className="font-mono text-[9px] leading-tight text-gray-600 bg-gray-50 p-2 rounded overflow-hidden mb-3 whitespace-pre">
+                      <p className="font-semibold text-foreground mb-2">{t(card.nameKey)}</p>
+                      <pre className="font-mono text-[9px] leading-tight text-muted-foreground bg-muted p-2 rounded overflow-hidden mb-3 whitespace-pre">
                         {card.preview}
                       </pre>
-                      <p className="text-xs text-gray-500">
+                      <p className="text-xs text-muted-foreground">
                         {card.id === 'classic'
                           ? t('settings.billTemplateClassicDesc')
                           : card.id === 'compact'
@@ -3272,16 +3277,16 @@ export default function SettingsPage() {
               </div>
             </div>
 
-            <div className="bg-white rounded-xl border border-gray-100 p-6">
-              <h2 className="font-semibold text-gray-900 mb-4">{t('settings.footerMessage')}</h2>
+            <div className="bg-card rounded-xl border border-border p-6">
+              <h2 className="font-semibold text-foreground mb-4">{t('settings.footerMessage')}</h2>
               <div>
-                <label htmlFor="footer-message" className="block text-sm font-medium text-gray-700 mb-1">{t('settings.footerMessage')}</label>
+                <label htmlFor="footer-message" className="block text-sm font-medium text-foreground mb-1">{t('settings.footerMessage')}</label>
                 <textarea id="footer-message" rows={2}
                   placeholder={t('settings.footerMessagePlaceholder')}
                   value={billForm.billFooterMessage}
                   onChange={(e) => setBillForm((p) => ({ ...p, billFooterMessage: e.target.value }))}
-                  className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg outline-none focus:ring-2 focus:ring-brand resize-none" />
-                <p className="text-xs text-gray-400 mt-1">{t('settings.footerMessageHint')}</p>
+                  className="w-full px-3 py-2 text-sm border border-border rounded-lg outline-none focus:ring-2 focus:ring-brand resize-none" />
+                <p className="text-xs text-muted-foreground/70 mt-1">{t('settings.footerMessageHint')}</p>
               </div>
             </div>
           </div>
@@ -3293,14 +3298,14 @@ export default function SettingsPage() {
         <TabsContent value="data">
           <div className="pb-6 max-w-3xl space-y-6">
             <div className="space-y-6">
-            <h2 className="text-lg font-semibold text-gray-900">{t('settings.tabBackupData')}</h2>
+            <h2 className="text-lg font-semibold text-foreground">{t('settings.tabBackupData')}</h2>
             {/* Database Export */}
-            <div className="bg-white rounded-xl border border-gray-100 p-6">
+            <div className="bg-card rounded-xl border border-border p-6">
               <div className="flex items-center gap-2 mb-4">
-                <FileText size={20} className="text-gray-500" />
-                <h2 className="font-semibold text-gray-900">{t('settings.exportDatabase')}</h2>
+                <FileText size={20} className="text-muted-foreground" />
+                <h2 className="font-semibold text-foreground">{t('settings.exportDatabase')}</h2>
               </div>
-              <p className="text-sm text-gray-500 mb-4">
+              <p className="text-sm text-muted-foreground mb-4">
                 {t('settings.exportDatabaseHint')}
               </p>
               <button
@@ -3328,12 +3333,12 @@ export default function SettingsPage() {
             </div>
 
             {/* Database Backup */}
-            <div className="bg-white rounded-xl border border-gray-100 p-6">
+            <div className="bg-card rounded-xl border border-border p-6">
               <div className="flex items-center gap-2 mb-4">
-                <FileText size={20} className="text-gray-500" />
-                <h2 className="font-semibold text-gray-900">{t('settings.createBackup')}</h2>
+                <FileText size={20} className="text-muted-foreground" />
+                <h2 className="font-semibold text-foreground">{t('settings.createBackup')}</h2>
               </div>
-              <p className="text-sm text-gray-500 mb-4">
+              <p className="text-sm text-muted-foreground mb-4">
                 {t('settings.createBackupHint')}
               </p>
               <div className="flex flex-wrap gap-2">
@@ -3345,7 +3350,7 @@ export default function SettingsPage() {
                 </button>
                 <button
                   onClick={handleChooseBackupLocation}
-                  className="px-5 py-2 text-sm bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 font-medium"
+                  className="px-5 py-2 text-sm bg-muted text-foreground rounded-lg hover:bg-border font-medium"
                 >
                   {t('settings.chooseBackupLocation')}
                 </button>
@@ -3353,35 +3358,35 @@ export default function SettingsPage() {
             </div>
 
             {/* Backup History */}
-            <div className="bg-white rounded-xl border border-gray-100 p-6">
+            <div className="bg-card rounded-xl border border-border p-6">
               <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center gap-2">
-                  <Database size={20} className="text-gray-500" />
-                  <h2 className="font-semibold text-gray-900">{t('settings.backupHistory')}</h2>
+                  <Database size={20} className="text-muted-foreground" />
+                  <h2 className="font-semibold text-foreground">{t('settings.backupHistory')}</h2>
                 </div>
                 <button
                   onClick={fetchBackups}
                   disabled={backupsLoading}
-                  className="p-1.5 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-50 disabled:opacity-50"
+                  className="p-1.5 text-muted-foreground/70 hover:text-muted-foreground rounded-lg hover:bg-muted disabled:opacity-50"
                   title={t('settings.refresh')}
                 >
                   <RefreshCw size={16} className={backupsLoading ? 'animate-spin' : ''} />
                 </button>
               </div>
-              <p className="text-sm text-gray-500 mb-4">
+              <p className="text-sm text-muted-foreground mb-4">
                 {t('settings.backupHistoryHint')}
               </p>
               {backups.length === 0 ? (
-                <p className="text-sm text-gray-400 py-4 text-center">
+                <p className="text-sm text-muted-foreground/70 py-4 text-center">
                   {backupsLoading ? t('common.loading') : t('settings.backupHistoryEmpty')}
                 </p>
               ) : (
-                <div className="divide-y divide-gray-100">
+                <div className="divide-y divide-border">
                   {backups.map((backup) => (
                     <div key={backup.path} className="flex items-center justify-between py-3 gap-3">
                       <div className="min-w-0">
                         <div className="flex items-center gap-2">
-                          <span className="text-sm font-medium text-gray-900">{formatDateTime(backup.createdAt)}</span>
+                          <span className="text-sm font-medium text-foreground">{formatDateTime(backup.createdAt)}</span>
                           {backup.kind === 'auto' && (
                             <span className="text-xs px-1.5 py-0.5 rounded bg-amber-50 text-amber-700 border border-amber-100">
                               {t('settings.backupKindAuto')}
@@ -3394,7 +3399,7 @@ export default function SettingsPage() {
                             </span>
                           )}
                         </div>
-                        <p className="text-xs text-gray-400 truncate">
+                        <p className="text-xs text-muted-foreground/70 truncate">
                           {formatBackupSize(backup.sizeBytes)}
                           {backup.schemaVersion != null && ` · ${t('settings.backupSchemaVersion', { version: backup.schemaVersion })}`}
                         </p>
@@ -3402,13 +3407,13 @@ export default function SettingsPage() {
                       <div className="shrink-0 flex items-center gap-2">
                         <button
                           onClick={() => handleRestoreFromHistory(backup)}
-                          className="px-3 py-1.5 text-xs bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 font-medium"
+                          className="px-3 py-1.5 text-xs bg-muted text-foreground rounded-lg hover:bg-border font-medium"
                         >
                           {t('settings.restoreBackup')}
                         </button>
                         <button
                           onClick={() => handleDeleteBackup(backup)}
-                          className="p-1.5 text-gray-400 hover:text-red-600 rounded-lg hover:bg-red-50"
+                          className="p-1.5 text-muted-foreground/70 hover:text-red-600 rounded-lg hover:bg-red-50"
                           title={t('settings.deleteBackup')}
                         >
                           <Trash2 size={14} />
@@ -3421,22 +3426,22 @@ export default function SettingsPage() {
             </div>
 
             {/* Google Drive — automated off-device backups (#129) */}
-            <div className="bg-white rounded-xl border border-gray-100 p-6 space-y-4">
+            <div className="bg-card rounded-xl border border-border p-6 space-y-4">
               <div className="flex items-center gap-2">
-                <HardDrive size={20} className="text-gray-500" />
+                <HardDrive size={20} className="text-muted-foreground" />
                 <div>
-                  <h2 className="font-semibold text-gray-900">{t('settings.googleDrive')}</h2>
-                  <p className="text-xs text-gray-500 mt-0.5">{t('settings.googleDriveHint')}</p>
+                  <h2 className="font-semibold text-foreground">{t('settings.googleDrive')}</h2>
+                  <p className="text-xs text-muted-foreground mt-0.5">{t('settings.googleDriveHint')}</p>
                 </div>
               </div>
 
               {!googleDriveStatus.configured ? (
-                <div className="bg-gray-50 rounded-xl p-6 flex flex-col items-center justify-center text-center space-y-2">
-                  <div className="p-3 bg-white rounded-full shadow-sm">
-                    <HardDrive className="w-6 h-6 text-gray-400" />
+                <div className="bg-muted rounded-xl p-6 flex flex-col items-center justify-center text-center space-y-2">
+                  <div className="p-3 bg-card rounded-full shadow-sm">
+                    <HardDrive className="w-6 h-6 text-muted-foreground/70" />
                   </div>
-                  <p className="text-sm font-medium text-gray-900">{t('settings.googleDriveNotConfigured')}</p>
-                  <p className="text-xs text-gray-500 max-w-sm">{t('settings.googleDriveNotConfiguredHint')}</p>
+                  <p className="text-sm font-medium text-foreground">{t('settings.googleDriveNotConfigured')}</p>
+                  <p className="text-xs text-muted-foreground max-w-sm">{t('settings.googleDriveNotConfiguredHint')}</p>
                 </div>
               ) : !googleDriveStatus.secure_storage_available ? (
                 <div className="flex items-center gap-2 bg-amber-50 border border-amber-100 rounded-lg px-4 py-3">
@@ -3445,19 +3450,19 @@ export default function SettingsPage() {
                 </div>
               ) : (
                 <>
-                  <div className="rounded-lg border border-gray-100 px-4 py-3 flex items-center justify-between gap-3 flex-wrap">
+                  <div className="rounded-lg border border-border px-4 py-3 flex items-center justify-between gap-3 flex-wrap">
                     <div className="flex items-center gap-2">
                       {googleDriveStatus.connected ? (
                         <CheckCircle2 size={16} className="text-green-600 shrink-0" />
                       ) : (
-                        <CloudOff size={16} className="text-gray-400 shrink-0" />
+                        <CloudOff size={16} className="text-muted-foreground/70 shrink-0" />
                       )}
                       <div>
-                        <p className="text-sm font-medium text-gray-900">
+                        <p className="text-sm font-medium text-foreground">
                           {googleDriveStatus.connected ? t('settings.googleDriveConnected') : t('settings.googleDriveNotConnected')}
                         </p>
                         {googleDriveStatus.connected && googleDriveStatus.account_email && (
-                          <p className="text-xs text-gray-500">{t('settings.googleDriveAccount')}: {googleDriveStatus.account_email}</p>
+                          <p className="text-xs text-muted-foreground">{t('settings.googleDriveAccount')}: {googleDriveStatus.account_email}</p>
                         )}
                       </div>
                     </div>
@@ -3466,7 +3471,7 @@ export default function SettingsPage() {
                         <button
                           onClick={disconnectGoogleDrive}
                           disabled={disconnectingGoogleDrive}
-                          className="px-4 py-2 text-sm border border-gray-200 rounded-lg hover:bg-gray-50 disabled:opacity-50 font-medium shrink-0"
+                          className="px-4 py-2 text-sm border border-border rounded-lg hover:bg-muted disabled:opacity-50 font-medium shrink-0"
                         >
                           {disconnectingGoogleDrive ? t('settings.googleDriveDisconnecting') : t('settings.googleDriveDisconnect')}
                         </button>
@@ -3486,19 +3491,19 @@ export default function SettingsPage() {
                     <>
                       <div className="grid sm:grid-cols-2 gap-4">
                         <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">{t('settings.googleDriveFrequency')}</label>
+                          <label className="block text-sm font-medium text-foreground mb-1">{t('settings.googleDriveFrequency')}</label>
                           <select
                             value={googleDriveStatus.frequency}
                             disabled={savingGoogleDrivePrefs}
                             onChange={(e) => updateGoogleDrivePrefs({ frequency: e.target.value as 'daily' | 'weekly' })}
-                            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-brand outline-none disabled:opacity-50"
+                            className="w-full px-3 py-2 border border-input rounded-lg text-sm focus:ring-2 focus:ring-brand outline-none disabled:opacity-50"
                           >
                             <option value="daily">{t('settings.googleDriveFrequencyDaily')}</option>
                             <option value="weekly">{t('settings.googleDriveFrequencyWeekly')}</option>
                           </select>
                         </div>
                         <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">{t('settings.googleDriveRetention')}</label>
+                          <label className="block text-sm font-medium text-foreground mb-1">{t('settings.googleDriveRetention')}</label>
                           <input
                             type="number"
                             min={1}
@@ -3510,14 +3515,14 @@ export default function SettingsPage() {
                               const n = Number(e.target.value);
                               if (Number.isInteger(n) && n >= 1 && n <= 100) updateGoogleDrivePrefs({ retention_count: n });
                             }}
-                            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-brand outline-none disabled:opacity-50"
+                            className="w-full px-3 py-2 border border-input rounded-lg text-sm focus:ring-2 focus:ring-brand outline-none disabled:opacity-50"
                           />
                         </div>
                       </div>
-                      <p className="text-xs text-gray-500">{t('settings.googleDriveRetentionHint')}</p>
+                      <p className="text-xs text-muted-foreground">{t('settings.googleDriveRetentionHint')}</p>
 
                       <div className="flex items-center justify-between gap-3 flex-wrap pt-1">
-                        <div className="text-xs text-gray-500">
+                        <div className="text-xs text-muted-foreground">
                           {googleDriveStatus.last_backup_at ? (
                             googleDriveStatus.last_backup_status === 'error' ? (
                               <span className="flex items-center gap-1 text-red-600">
@@ -3525,7 +3530,7 @@ export default function SettingsPage() {
                                 {t('settings.googleDriveLastBackupErrorAt', { time: formatDateTime(googleDriveStatus.last_backup_at) })}
                               </span>
                             ) : (
-                              <span className="flex items-center gap-1 text-gray-500">
+                              <span className="flex items-center gap-1 text-muted-foreground">
                                 <CheckCircle2 size={13} className="text-green-600" />
                                 {t('settings.googleDriveLastBackupSuccessAt', { time: formatDateTime(googleDriveStatus.last_backup_at) })}
                               </span>
@@ -3552,12 +3557,12 @@ export default function SettingsPage() {
             </div>
 
             {/* Database Import */}
-            <div className="bg-white rounded-xl border border-gray-100 p-6">
+            <div className="bg-card rounded-xl border border-border p-6">
               <div className="flex items-center gap-2 mb-4">
-                <FileText size={20} className="text-gray-500" />
-                <h2 className="font-semibold text-gray-900">{t('settings.importDatabase')}</h2>
+                <FileText size={20} className="text-muted-foreground" />
+                <h2 className="font-semibold text-foreground">{t('settings.importDatabase')}</h2>
               </div>
-              <p className="text-sm text-gray-500 mb-4">
+              <p className="text-sm text-muted-foreground mb-4">
                 {t('settings.importDatabaseHint')}
               </p>
               <input
@@ -3601,7 +3606,7 @@ export default function SettingsPage() {
               <div className="flex gap-2">
                 <label
                   htmlFor="import-file"
-                  className="px-5 py-2 text-sm bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 cursor-pointer font-medium"
+                  className="px-5 py-2 text-sm bg-muted text-foreground rounded-lg hover:bg-border cursor-pointer font-medium"
                 >
                   {t('settings.selectFileAndImport')}
                 </label>
@@ -3609,10 +3614,10 @@ export default function SettingsPage() {
             </div>
 
             {/* Database Info */}
-            <div className="bg-white rounded-xl border border-gray-100 p-6">
+            <div className="bg-card rounded-xl border border-border p-6">
               <div className="flex items-center gap-2 mb-4">
-                <Database size={20} className="text-gray-500" />
-                <h2 className="font-semibold text-gray-900">{t('settings.databaseInformation')}</h2>
+                <Database size={20} className="text-muted-foreground" />
+                <h2 className="font-semibold text-foreground">{t('settings.databaseInformation')}</h2>
               </div>
               <button
                 onClick={async () => {
@@ -3625,36 +3630,36 @@ export default function SettingsPage() {
                     toast.error(t('settings.tableInfoFailed'));
                   }
                 }}
-                className="px-5 py-2 text-sm border border-gray-200 text-gray-600 rounded-lg hover:bg-gray-50 font-medium"
+                className="px-5 py-2 text-sm border border-border text-muted-foreground rounded-lg hover:bg-muted font-medium"
               >
                 {t('settings.viewTableInfo')}
               </button>
             </div>
 
             {/* Database Health Check */}
-            <div className="bg-white rounded-xl border border-gray-100 p-6">
+            <div className="bg-card rounded-xl border border-border p-6">
               <div className="flex items-center gap-2 mb-4">
-                <Wrench size={20} className="text-gray-500" />
-                <h2 className="font-semibold text-gray-900">{t('settings.databaseHealthCheck')}</h2>
+                <Wrench size={20} className="text-muted-foreground" />
+                <h2 className="font-semibold text-foreground">{t('settings.databaseHealthCheck')}</h2>
               </div>
-              <p className="text-sm text-gray-500 mb-4">
+              <p className="text-sm text-muted-foreground mb-4">
                 {t('settings.databaseHealthCheckDescription')}
               </p>
               <button
                 onClick={runHealthCheck}
-                className="px-5 py-2 text-sm border border-gray-200 text-gray-600 rounded-lg hover:bg-gray-50 font-medium"
+                className="px-5 py-2 text-sm border border-border text-muted-foreground rounded-lg hover:bg-muted font-medium"
               >
                 {t('settings.databaseHealthCheck')}
               </button>
             </div>
 
             {/* Master PIN */}
-            <div className="bg-white rounded-xl border border-gray-100 p-6">
+            <div className="bg-card rounded-xl border border-border p-6">
               <div className="flex items-center gap-2 mb-4">
-                <KeyRound size={20} className="text-gray-500" />
-                <h2 className="font-semibold text-gray-900">{t('settings.masterPin')}</h2>
+                <KeyRound size={20} className="text-muted-foreground" />
+                <h2 className="font-semibold text-foreground">{t('settings.masterPin')}</h2>
               </div>
-              <p className="text-sm text-gray-500 mb-4">
+              <p className="text-sm text-muted-foreground mb-4">
                 {t('settings.masterPinDataDescription')}
               </p>
               {!masterPinStatus.available ? (
@@ -3666,7 +3671,7 @@ export default function SettingsPage() {
                   </span>
                   <button
                     onClick={() => setPinGate({ mode: 'set' })}
-                    className="px-5 py-2 text-sm border border-gray-200 text-gray-600 rounded-lg hover:bg-gray-50 font-medium"
+                    className="px-5 py-2 text-sm border border-border text-muted-foreground rounded-lg hover:bg-muted font-medium"
                   >
                     {masterPinStatus.isSet ? t('settings.masterPinChangeButton') : t('settings.masterPinSetButton')}
                   </button>
@@ -3675,12 +3680,12 @@ export default function SettingsPage() {
             </div>
 
             {/* Danger Zone: Initialize Database */}
-            <div className="bg-white rounded-xl border border-red-200 p-6">
+            <div className="bg-card rounded-xl border border-red-200 p-6">
               <div className="flex items-center gap-2 mb-4">
                 <AlertTriangle size={20} className="text-red-600" />
                 <h2 className="font-semibold text-red-600">{t('settings.initializeDatabase')}</h2>
               </div>
-              <p className="text-sm text-gray-500 mb-4">
+              <p className="text-sm text-muted-foreground mb-4">
                 {t('settings.initializeDatabaseDescription')}
               </p>
               <button
@@ -3700,10 +3705,10 @@ export default function SettingsPage() {
             {!whatsappEnabled ? (
               <WhatsAppEnableCard />
             ) : (
-              <div className="bg-white rounded-xl border border-gray-100 p-6 flex items-center justify-between gap-4">
+              <div className="bg-card rounded-xl border border-border p-6 flex items-center justify-between gap-4">
                 <div>
-                  <p className="font-semibold text-gray-900">{t('whatsapp.settings.enabled')}</p>
-                  <p className="text-xs text-gray-500 mt-0.5">{t('whatsapp.settings.enabledHint')}</p>
+                  <p className="font-semibold text-foreground">{t('whatsapp.settings.enabled')}</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">{t('whatsapp.settings.enabledHint')}</p>
                 </div>
                 <Button asChild variant="outline" size="sm">
                   <Link href="/whatsapp">{t('whatsapp.settings.openConnection')}</Link>
@@ -3716,26 +3721,26 @@ export default function SettingsPage() {
         <TabsContent value="mobile-access">
           <div className="pb-6 max-w-3xl space-y-6">
             <div className="space-y-6">
-            <h2 className="text-lg font-semibold text-gray-900">{t('settings.tabMobileAccess')}</h2>
+            <h2 className="text-lg font-semibold text-foreground">{t('settings.tabMobileAccess')}</h2>
 
             {/* FloAdmin — reporting sync */}
-            <div className="bg-white rounded-xl border border-gray-100 p-6 space-y-5">
+            <div className="bg-card rounded-xl border border-border p-6 space-y-5">
               <div className="flex items-center gap-2">
                 <Cloud size={20} className="text-brand" />
                 <div>
-                  <h2 className="font-semibold text-gray-900">{t('settings.floadminSalesReporting')}</h2>
-                  <p className="text-xs text-gray-500 mt-0.5">{t('settings.floadminSalesReportingHint')}</p>
+                  <h2 className="font-semibold text-foreground">{t('settings.floadminSalesReporting')}</h2>
+                  <p className="text-xs text-muted-foreground mt-0.5">{t('settings.floadminSalesReportingHint')}</p>
                 </div>
               </div>
 
               {cloudStatus.cloud_registration_status === 'unregistered' ? (
-                <div className="bg-gray-50 rounded-xl p-6 flex flex-col items-center justify-center text-center space-y-4">
-                  <div className="p-3 bg-white rounded-full shadow-sm">
+                <div className="bg-muted rounded-xl p-6 flex flex-col items-center justify-center text-center space-y-4">
+                  <div className="p-3 bg-card rounded-full shadow-sm">
                     <Cloud className="w-6 h-6 text-brand" />
                   </div>
                   <div>
-                    <h3 className="font-medium text-gray-900">Cloud Services Disabled</h3>
-                    <p className="text-sm text-gray-500 mt-1 max-w-sm">Initialize cloud services to enable remote sales reporting, bill sync, and online dashboard access.</p>
+                    <h3 className="font-medium text-foreground">Cloud Services Disabled</h3>
+                    <p className="text-sm text-muted-foreground mt-1 max-w-sm">Initialize cloud services to enable remote sales reporting, bill sync, and online dashboard access.</p>
                   </div>
                   <button
                     onClick={() => setShowInitializeCloudConfirm(true)}
@@ -3746,20 +3751,20 @@ export default function SettingsPage() {
                 </div>
               ) : (
                 <>
-                  <div className="rounded-lg border border-gray-100 px-4 py-3 flex items-center justify-between gap-3 flex-wrap">
+                  <div className="rounded-lg border border-border px-4 py-3 flex items-center justify-between gap-3 flex-wrap">
                     <div className="flex items-center gap-2">
                   {cloudStatus.cloud_registration_status === 'registered' ? (
                     <CheckCircle2 size={16} className="text-green-600 shrink-0" />
                   ) : (
-                    <CloudOff size={16} className="text-gray-400 shrink-0" />
+                    <CloudOff size={16} className="text-muted-foreground/70 shrink-0" />
                   )}
                   <div>
-                    <p className="text-sm font-medium text-gray-900">
+                    <p className="text-sm font-medium text-foreground">
                       {cloudStatus.cloud_registration_status === 'registered' && (cloudStatus.cloud_connected ? t('settings.connectedToFloadmin') : t('settings.registeredReconnecting'))}
                       {cloudStatus.cloud_registration_status === 'rejected' && t('settings.registrationRejected')}
                       {(cloudStatus.cloud_registration_status === 'unregistered' || cloudStatus.cloud_registration_status === 'registration_failed') && t('settings.notRegistered')}
                     </p>
-                    <p className="text-xs text-gray-500">
+                    <p className="text-xs text-muted-foreground">
                       {cloudStatus.cloud_registration_status === 'registered' && (cloudStatus.cloud_last_heartbeat ? t('settings.liveChannelHeartbeat', { mode: cloudStatus.cloud_relay_mode.replace('_', ' '), time: formatTime(cloudStatus.cloud_last_heartbeat) }) : t('settings.liveChannel', { mode: cloudStatus.cloud_relay_mode.replace('_', ' ') }))}
                       {cloudStatus.cloud_registration_status === 'rejected' && t('settings.registrationContactSupport')}
                       {cloudStatus.cloud_registration_status === 'registration_failed' && (cloudStatus.cloud_last_error ? t('settings.registrationLastError', { error: cloudStatus.cloud_last_error }) : t('settings.registrationLastFailed'))}
@@ -3779,23 +3784,23 @@ export default function SettingsPage() {
               </div>
 
               <div className="space-y-3">
-                <p className="text-sm text-gray-600">{t('settings.cloudManagedAutomatically')}</p>
+                <p className="text-sm text-muted-foreground">{t('settings.cloudManagedAutomatically')}</p>
 
                 <label className="flex items-start gap-3 cursor-pointer">
                   <input
                     type="checkbox"
                     checked={cloudSettings.cloud_sync_enabled}
                     onChange={(e) => setCloudSettings({ ...cloudSettings, cloud_sync_enabled: e.target.checked })}
-                    className="mt-0.5 rounded border-gray-300 text-brand focus:ring-brand"
+                    className="mt-0.5 rounded border-input text-brand focus:ring-brand"
                   />
                   <div>
-                    <span className="text-sm font-medium text-gray-900 block">{t('settings.enableBillSync')}</span>
-                    <p className="text-xs text-gray-500 mt-1">{t('settings.enableBillSyncHint')}</p>
+                    <span className="text-sm font-medium text-foreground block">{t('settings.enableBillSync')}</span>
+                    <p className="text-xs text-muted-foreground mt-1">{t('settings.enableBillSyncHint')}</p>
                   </div>
                 </label>
 
                     {cloudSettings.cloud_last_sync && (
-                      <p className="text-xs text-gray-400">{t('settings.lastSync', { time: formatDateTime(cloudSettings.cloud_last_sync) })}</p>
+                      <p className="text-xs text-muted-foreground/70">{t('settings.lastSync', { time: formatDateTime(cloudSettings.cloud_last_sync) })}</p>
                     )}
                   </div>
                 </>
@@ -3803,23 +3808,23 @@ export default function SettingsPage() {
             </div>
 
             {/* RevFlo — consolidated: download/QR + app (pairing) code + paired devices */}
-            <div className="bg-white rounded-xl border border-gray-100 p-6 space-y-5">
+            <div className="bg-card rounded-xl border border-border p-6 space-y-5">
               <div className="flex items-center gap-2">
-                <Smartphone size={20} className="text-gray-500" />
+                <Smartphone size={20} className="text-muted-foreground" />
                 <div>
-                  <h2 className="font-semibold text-gray-900">{revflo?.name || t('settings.revflo')}</h2>
-                  <p className="text-xs text-gray-500 mt-0.5">{revflo?.tagline || t('settings.revfloHint')}</p>
+                  <h2 className="font-semibold text-foreground">{revflo?.name || t('settings.revflo')}</h2>
+                  <p className="text-xs text-muted-foreground mt-0.5">{revflo?.tagline || t('settings.revfloHint')}</p>
                 </div>
               </div>
 
               {revflo?.available && (
-                <div className="flex flex-col sm:flex-row gap-5 items-start border border-gray-100 rounded-xl p-5">
+                <div className="flex flex-col sm:flex-row gap-5 items-start border border-border rounded-xl p-5">
                   <div className="shrink-0">
                     {revflo.qr_data_url ? (
                       <img src={revflo.qr_data_url} alt={t('settings.appQrAlt', { name: revflo.name })}
-                        className="w-28 h-28 rounded-lg border border-gray-200" />
+                        className="w-28 h-28 rounded-lg border border-border" />
                     ) : (
-                      <div className="w-28 h-28 rounded-lg border border-gray-200 flex items-center justify-center text-gray-400">
+                      <div className="w-28 h-28 rounded-lg border border-border flex items-center justify-center text-muted-foreground/70">
                         <QrCode size={32} />
                       </div>
                     )}
@@ -3840,25 +3845,25 @@ export default function SettingsPage() {
               )}
 
               <div>
-                <p className="text-sm font-medium text-gray-900 mb-1">{t('settings.mobileApp')}</p>
-                <p className="text-xs text-gray-500 mb-4">{t('settings.mobileAppHint')}</p>
+                <p className="text-sm font-medium text-foreground mb-1">{t('settings.mobileApp')}</p>
+                <p className="text-xs text-muted-foreground mb-4">{t('settings.mobileAppHint')}</p>
                 {pairingUnavailable ? (
-                  <p className="text-sm text-gray-500">{t('settings.mobilePairingNeedsCloud')}</p>
+                  <p className="text-sm text-muted-foreground">{t('settings.mobilePairingNeedsCloud')}</p>
                 ) : pairingCode ? (
                   <div className="space-y-3">
                     <div className="flex items-center gap-4">
                       {pairingQrDataUrl && (
-                        <img src={pairingQrDataUrl} alt={t('settings.pairingQrAlt')} className="w-28 h-28 rounded-lg border border-gray-200" />
+                        <img src={pairingQrDataUrl} alt={t('settings.pairingQrAlt')} className="w-28 h-28 rounded-lg border border-border" />
                       )}
                       <div className="flex items-center gap-3 flex-1">
-                      <div className="flex-1 bg-gray-50 border border-gray-200 rounded-lg px-4 py-3 text-center">
-                        <span className="font-mono text-2xl font-bold tracking-[0.3em] text-gray-900">
+                      <div className="flex-1 bg-muted border border-border rounded-lg px-4 py-3 text-center">
+                        <span className="font-mono text-2xl font-bold tracking-[0.3em] text-foreground">
                           {pairingCode.toUpperCase()}
                         </span>
                       </div>
                       <button
                         onClick={copyPairingCode}
-                        className="p-2.5 border border-gray-200 rounded-lg hover:bg-gray-50 text-gray-500"
+                        className="p-2.5 border border-border rounded-lg hover:bg-muted text-muted-foreground"
                         title={t('settings.copyCode')}
                       >
                         {copiedCode ? <Check size={18} className="text-green-600" /> : <Copy size={18} />}
@@ -3866,17 +3871,17 @@ export default function SettingsPage() {
                       </div>
                     </div>
                     {pairingExpiresAt && (
-                      <p className="text-xs text-gray-400">
+                      <p className="text-xs text-muted-foreground/70">
                         {t('settings.codeExpires', { date: formatDate(pairingExpiresAt) })}
                       </p>
                     )}
-                    <p className="text-xs text-gray-500">
+                    <p className="text-xs text-muted-foreground">
                       {t('settings.pairingCodeSingleUse')}
                     </p>
                     <button
                       onClick={rotatePairingCode}
                       disabled={rotatingCode}
-                      className="flex items-center gap-2 text-sm text-gray-600 hover:text-gray-900 disabled:opacity-50"
+                      className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground disabled:opacity-50"
                     >
                       <RefreshCw size={14} className={rotatingCode ? 'animate-spin' : ''} />
                       {rotatingCode ? t('settings.generating') : t('settings.generateNewCode')}
@@ -3897,31 +3902,31 @@ export default function SettingsPage() {
               </div>
 
               {!pairingUnavailable && (
-                <div className="pt-5 border-t border-gray-100">
-                  <p className="text-sm font-medium text-gray-900 mb-3">{t('settings.pairedDevices')}</p>
+                <div className="pt-5 border-t border-border">
+                  <p className="text-sm font-medium text-foreground mb-3">{t('settings.pairedDevices')}</p>
                   {devicesLoading ? (
-                    <p className="text-sm text-gray-400">{t('settings.loading')}</p>
+                    <p className="text-sm text-muted-foreground/70">{t('settings.loading')}</p>
                   ) : pairedDevices.length === 0 ? (
-                    <p className="text-sm text-gray-500">{t('settings.noPairedDevices')}</p>
+                    <p className="text-sm text-muted-foreground">{t('settings.noPairedDevices')}</p>
                   ) : (
                     <div className="space-y-2">
                       {pairedDevices.map((d) => (
-                        <div key={d.id} className="bg-gray-50 border border-gray-200 rounded-lg px-4 py-3 text-sm">
+                        <div key={d.id} className="bg-muted border border-border rounded-lg px-4 py-3 text-sm">
                           <div className="flex items-center justify-between">
-                            <span className="font-medium text-gray-900 capitalize">
+                            <span className="font-medium text-foreground capitalize">
                               {d.platform || t('settings.unknownPlatform')}
                               {d.country ? ` · ${d.country}` : ''}
                             </span>
-                            <span className="text-xs text-gray-400">
+                            <span className="text-xs text-muted-foreground/70">
                               {t('settings.lastActive', { date: formatDate(d.last_seen_at) })}
                             </span>
                           </div>
-                          <p className="text-xs text-gray-500 mt-1">
+                          <p className="text-xs text-muted-foreground mt-1">
                             {t('settings.firstPaired', { date: formatDate(d.first_seen_at) })}
                             {d.app_version ? ` · v${d.app_version}` : ''}
                           </p>
                           {d.user_agent && (
-                            <p className="text-xs text-gray-400 mt-1 truncate" title={d.user_agent}>{d.user_agent}</p>
+                            <p className="text-xs text-muted-foreground/70 mt-1 truncate" title={d.user_agent}>{d.user_agent}</p>
                           )}
                         </div>
                       ))}
@@ -3937,15 +3942,15 @@ export default function SettingsPage() {
         <TabsContent value="orderflow">
           <div className="pb-6 max-w-3xl space-y-6">
             <div className="space-y-6">
-            <h2 className="text-lg font-semibold text-gray-900">{t('settings.tabOrderflow')}</h2>
+            <h2 className="text-lg font-semibold text-foreground">{t('settings.tabOrderflow')}</h2>
 
             {/* OrderFlow — online orders */}
-            <div className="bg-white rounded-xl border border-gray-100 p-6 space-y-4">
+            <div className="bg-card rounded-xl border border-border p-6 space-y-4">
               <div className="flex items-center gap-2">
                 <Zap size={20} className="text-amber-500" />
                 <div>
-                  <h2 className="font-semibold text-gray-900">{t('settings.orderflowOnlineOrders')}</h2>
-                  <p className="text-xs text-gray-500 mt-0.5">{t('settings.orderflowOnlineOrdersHint')}</p>
+                  <h2 className="font-semibold text-foreground">{t('settings.orderflowOnlineOrders')}</h2>
+                  <p className="text-xs text-muted-foreground mt-0.5">{t('settings.orderflowOnlineOrdersHint')}</p>
                 </div>
               </div>
 
@@ -3954,9 +3959,9 @@ export default function SettingsPage() {
                   type="checkbox"
                   checked={cloudSettings.cloud_orders_enabled}
                   onChange={(e) => setCloudSettings({ ...cloudSettings, cloud_orders_enabled: e.target.checked })}
-                  className="rounded border-gray-300 text-brand focus:ring-brand"
+                  className="rounded border-input text-brand focus:ring-brand"
                 />
-                <span className="text-sm text-gray-700">{t('settings.enableOnlineOrderPolling')}</span>
+                <span className="text-sm text-foreground">{t('settings.enableOnlineOrderPolling')}</span>
               </label>
 
             </div>
@@ -3967,9 +3972,9 @@ export default function SettingsPage() {
         {/* About tab */}
         <TabsContent value="about">
           <div className="pb-6 max-w-3xl space-y-6">
-            <div className="bg-white rounded-xl border border-gray-100 p-6">
-              <h2 className="font-semibold text-gray-900 mb-4">{t('settings.aboutFloCafe')}</h2>
-              <p className="text-sm text-gray-600 mb-6">
+            <div className="bg-card rounded-xl border border-border p-6">
+              <h2 className="font-semibold text-foreground mb-4">{t('settings.aboutFloCafe')}</h2>
+              <p className="text-sm text-muted-foreground mb-6">
                 {t('settings.aboutDescription')}
               </p>
               <div className="space-y-3">
@@ -3985,12 +3990,12 @@ export default function SettingsPage() {
             </div>
 
             {/* More Apps — moved here from the old Integrations tab */}
-            <div className="bg-white rounded-xl border border-gray-100 p-6">
+            <div className="bg-card rounded-xl border border-border p-6">
               <div className="flex items-center gap-2 mb-4">
-                <Smartphone size={20} className="text-gray-500" />
-                <h2 className="font-semibold text-gray-900">{t('settings.moreApps')}</h2>
+                <Smartphone size={20} className="text-muted-foreground" />
+                <h2 className="font-semibold text-foreground">{t('settings.moreApps')}</h2>
               </div>
-              <p className="text-sm text-gray-500 mb-5">
+              <p className="text-sm text-muted-foreground mb-5">
                 {t('settings.moreAppsHint')}
               </p>
 
@@ -4003,25 +4008,25 @@ export default function SettingsPage() {
               {!moreAppsLoading && (
                 <div className="space-y-4">
                   {moreApps.map((app) => (
-                    <div key={app.id} className="flex flex-col sm:flex-row gap-5 items-start border border-gray-100 rounded-xl p-5">
+                    <div key={app.id} className="flex flex-col sm:flex-row gap-5 items-start border border-border rounded-xl p-5">
                       <div className="shrink-0">
                         {app.qr_data_url ? (
                           <img src={app.qr_data_url} alt={t('settings.appQrAlt', { name: app.name })}
-                            className="w-32 h-32 rounded-lg border border-gray-200" />
+                            className="w-32 h-32 rounded-lg border border-border" />
                         ) : (
-                          <div className="w-32 h-32 rounded-lg border border-gray-200 flex items-center justify-center text-gray-400">
+                          <div className="w-32 h-32 rounded-lg border border-border flex items-center justify-center text-muted-foreground/70">
                             <QrCode size={36} />
                           </div>
                         )}
                       </div>
                       <div className="flex-1">
                         <div className="flex items-center gap-2 mb-1">
-                          <h3 className="font-semibold text-gray-900">{app.name}</h3>
+                          <h3 className="font-semibold text-foreground">{app.name}</h3>
                           {!app.available && (
-                            <span className="text-xs font-medium text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">{t('settings.comingSoon')}</span>
+                            <span className="text-xs font-medium text-muted-foreground/70 bg-muted px-2 py-0.5 rounded-full">{t('settings.comingSoon')}</span>
                           )}
                         </div>
-                        <p className="text-sm text-gray-500 mb-3">{app.tagline}</p>
+                        <p className="text-sm text-muted-foreground mb-3">{app.tagline}</p>
                         <div className="flex gap-3 text-sm">
                           {app.ios_url && (
                             <a href={app.ios_url} target="_blank" rel="noopener noreferrer" className="text-brand hover:underline">
@@ -4038,7 +4043,7 @@ export default function SettingsPage() {
                     </div>
                   ))}
                   {moreApps.length === 0 && (
-                    <p className="text-sm text-gray-400 text-center py-10">{t('settings.noAppsToShow')}</p>
+                    <p className="text-sm text-muted-foreground/70 text-center py-10">{t('settings.noAppsToShow')}</p>
                   )}
                 </div>
               )}
@@ -4049,12 +4054,12 @@ export default function SettingsPage() {
         {/* Software Updates tab */}
         <TabsContent value="updates">
           <div className="pb-6 max-w-3xl space-y-6">
-            <div className="bg-white rounded-xl border border-gray-100 p-6">
+            <div className="bg-card rounded-xl border border-border p-6">
             <div className="flex items-center gap-2 mb-4">
-              <RefreshCw size={20} className="text-gray-500" />
-              <h2 className="font-semibold text-gray-900">{t('settings.updates')}</h2>
+              <RefreshCw size={20} className="text-muted-foreground" />
+              <h2 className="font-semibold text-foreground">{t('settings.updates')}</h2>
             </div>
-            <p className="text-sm text-gray-500 mb-6">
+            <p className="text-sm text-muted-foreground mb-6">
               {updateStatus?.status === 'store'
                 ? t('settings.softwareUpdatesHintStore')
                 : updateStatus?.status === 'linux-managed'
@@ -4070,7 +4075,7 @@ export default function SettingsPage() {
                   ? 'bg-red-50 border border-red-200'
                   : updateStatus.status === 'dev-mode'
                   ? 'bg-yellow-50 border border-yellow-200'
-                  : 'bg-gray-50 border border-gray-200'
+                  : 'bg-muted border border-border'
               }`}>
                 <div className="flex items-center gap-2 mb-2">
                   {updateStatus.status === 'checking' && <RefreshCw size={16} className="animate-spin text-brand" />}
@@ -4078,8 +4083,8 @@ export default function SettingsPage() {
                   {updateStatus.status === 'up-to-date' && <CheckCircle2 size={16} className="text-green-600" />}
                   {updateStatus.status === 'ready-to-install' && <CheckCircle2 size={16} className="text-green-600" />}
                   {updateStatus.status === 'downloading' && <RefreshCw size={16} className="animate-spin text-brand" />}
-                  {updateStatus.status === 'error' && <span className="text-red-600">✕</span>}
-                  {updateStatus.status === 'dev-mode' && <span className="text-yellow-600">⚠</span>}
+                  {updateStatus.status === 'error' && <X size={14} className="text-red-600" />}
+                  {updateStatus.status === 'dev-mode' && <AlertTriangle size={14} className="text-yellow-600" />}
                   <span className="font-medium capitalize">
                     {updateStatus.status === 'available' ? t('settings.updateStatusAvailable')
                      : updateStatus.status === 'up-to-date' ? t('settings.updateStatusUpToDate')
@@ -4088,27 +4093,27 @@ export default function SettingsPage() {
                   </span>
                 </div>
                 {appVersion && (
-                  <p className="text-sm font-medium text-gray-900">{t('settings.version')}: {appVersion}</p>
+                  <p className="text-sm font-medium text-foreground">{t('settings.version')}: {appVersion}</p>
                 )}
                 {updateStatus.version && updateStatus.version !== appVersion && (
-                  <p className="text-sm text-gray-600 mt-1">Latest Available: {updateStatus.version}</p>
+                  <p className="text-sm text-muted-foreground mt-1">Latest Available: {updateStatus.version}</p>
                 )}
                 {updateStatus.percent !== undefined && (
                   <div className="mt-2">
-                    <div className="w-full bg-gray-200 rounded-full h-2">
+                    <div className="w-full bg-border rounded-full h-2">
                       <div
                         className="bg-brand h-2 rounded-full transition-all"
                         style={{ width: `${updateStatus.percent}%` }}
                       />
                     </div>
-                    <p className="text-xs text-gray-500 mt-1">{t('settings.percentDownloaded', { percent: updateStatus.percent.toFixed(1) })}</p>
+                    <p className="text-xs text-muted-foreground mt-1">{t('settings.percentDownloaded', { percent: updateStatus.percent.toFixed(1) })}</p>
                   </div>
                 )}
                 {updateStatus.error && (
                   <p className="text-sm text-red-600 mt-1">{updateStatus.error}</p>
                 )}
                 {updateStatus.status === 'up-to-date' && (
-                  <p className="text-sm text-gray-600">{t('settings.upToDate')}</p>
+                  <p className="text-sm text-muted-foreground">{t('settings.upToDate')}</p>
                 )}
                 {updateStatus.status === 'dev-mode' && (
                   <p className="text-sm text-yellow-600">{t('settings.devModeDisabled')}</p>
@@ -4146,8 +4151,8 @@ export default function SettingsPage() {
           <div className="max-h-60 overflow-y-auto space-y-1.5">
             {tableInfo.map((row) => (
               <div key={row.name} className="flex justify-between text-sm">
-                <span className="text-gray-700 font-mono">{row.name}</span>
-                <span className="text-gray-500">{row.rows.toLocaleString()} {t('settings.rows')}</span>
+                <span className="text-foreground font-mono">{row.name}</span>
+                <span className="text-muted-foreground">{row.rows.toLocaleString()} {t('settings.rows')}</span>
               </div>
             ))}
           </div>
