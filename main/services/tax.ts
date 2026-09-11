@@ -2,6 +2,7 @@ import Decimal from 'decimal.js';
 import { getDatabase, getSettingValue } from '../db';
 import { getBundledCountryPack } from '../tax-packs/bundled';
 import { getCountryByCode, type TaxIdFormat } from '../countries';
+import { isWeighed } from '../lib/units';
 
 interface TenantInfo {
   country: string;
@@ -182,12 +183,28 @@ export function hasConfiguredTaxCategories(pack: CountryPack, businessType: stri
   }));
 }
 
+/**
+ * What a line is taxed on.
+ *
+ * `taxableAmount` is the authoritative, already-rounded line amount and is
+ * what the engine actually taxes. `quantity` and `unitPrice` ride alongside so
+ * per-unit rules (a duty per kilo) and per-unit rounding can see the real
+ * numbers — previously the adapter hard-coded quantity to 1 and folded the
+ * whole amount into unitPrice, making both invisible.
+ */
+export interface TaxableLineInput {
+  taxableAmount: number;
+  quantity: number;
+  unitPrice: number;
+}
+
 export function calculateItemTax(
   tenant: TenantInfo,
   product: Product,
-  taxableAmount: number,
+  taxable: TaxableLineInput,
   customer: Customer | null
 ): TaxResult {
+  const taxableAmount = taxable.taxableAmount;
   if (!tenant.taxes_enabled) {
     return { tax_amount: 0, tax_breakdown: [], tax_type: 'none', tax_snapshot: null };
   }
@@ -239,8 +256,12 @@ export function calculateItemTax(
         lines: [{
           lineId: 'legacy-item-adapter',
           kind: 'product',
-          quantity: '1',
-          unitPrice: String(taxableAmount),
+          // The real quantity and unit price, with the persisted amount passed
+          // as the base so it is taxed exactly as stored — no re-multiplying,
+          // no centime of drift on a weighed line.
+          quantity: String(Number.isFinite(taxable.quantity) && taxable.quantity > 0 ? taxable.quantity : 1),
+          unitPrice: String(Number.isFinite(taxable.unitPrice) && taxable.unitPrice >= 0 ? taxable.unitPrice : taxableAmount),
+          grossAmount: String(taxableAmount),
           merchantCategoryId: merchantOverride?.categoryId,
           productCategoryId: taxCategoryId,
           taxBehavior: product.tax_behavior || 'country_default',
@@ -745,15 +766,21 @@ export async function calculateTaxPreview(req: any, res: any): Promise<void> {
       const rawDisc = Number(itemData.discount_amount);
       const itemDiscount = Number.isFinite(rawDisc) && rawDisc >= 0 ? rawDisc : 0;
 
+      // Mirrors computeLineSubtotal in routes/orders.ts. The preview and the
+      // written order must land on the same centime, or the till shows one
+      // total and the receipt prints another: an add-on is countable and so is
+      // not scaled by a weight, and the amount is rounded once.
+      const weighedLine = isWeighed(product.unit_of_measure);
       let subtotal = unitPrice * quantity;
       if (itemData.addons) {
         for (const addon of itemData.addons) {
-          subtotal += (addon.price || 0) * (addon.quantity || 1) * quantity;
+          subtotal += (addon.price || 0) * (addon.quantity || 1) * (weighedLine ? 1 : quantity);
         }
       }
-      subtotal = Math.max(0, subtotal - itemDiscount);
+      subtotal = round(Math.max(0, subtotal - itemDiscount), 2);
 
-      const taxResult = calculateItemTax(tenantInfo, product as Product, subtotal, customer || null);
+      const taxResult = calculateItemTax(tenantInfo, product as Product,
+        { taxableAmount: subtotal, quantity, unitPrice }, customer || null);
 
       itemResults.push({
         product_id: product.id,

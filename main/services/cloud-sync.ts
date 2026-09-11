@@ -1478,7 +1478,8 @@ class CloudSyncService {
 
     const topItems = db.prepare(`
       SELECT oi.product_id, oi.product_name,
-        COALESCE(SUM(oi.quantity), 0) as quantity,
+        COALESCE(SUM(CASE WHEN oi.unit_of_measure = 'kg' THEN 0 ELSE oi.quantity END), 0) as quantity,
+        COALESCE(SUM(CASE WHEN oi.unit_of_measure = 'kg' THEN oi.quantity ELSE 0 END), 0) as quantity_kg,
         COALESCE(SUM(oi.total), 0) as total
       FROM order_items oi
       JOIN orders o ON o.id = oi.order_id
@@ -1510,7 +1511,8 @@ class CloudSyncService {
        WHERE payment_status = 'paid' AND date(COALESCE(paid_at, created_at)) BETWEEN date(?) AND date(?)
     `).get(range.from, range.to) as any;
     const topItems = db.prepare(`
-      SELECT oi.product_name AS name, COALESCE(SUM(oi.quantity), 0) AS qty,
+      SELECT oi.product_name AS name, COALESCE(SUM(CASE WHEN oi.unit_of_measure = 'kg' THEN 0 ELSE oi.quantity END), 0) AS qty,
+        COALESCE(SUM(CASE WHEN oi.unit_of_measure = 'kg' THEN oi.quantity ELSE 0 END), 0) AS qty_kg,
              COALESCE(SUM(oi.total), 0) AS revenue,
              COALESCE(AVG(oi.unit_price), 0) AS price
         FROM order_items oi JOIN orders o ON o.id = oi.order_id JOIN bills b ON b.order_id = o.id
@@ -1548,7 +1550,8 @@ class CloudSyncService {
     const requestedLimit = Number(payload?.limit);
     const limit = Number.isInteger(requestedLimit) ? Math.min(Math.max(requestedLimit, 1), 100) : 50;
     const items = getDatabase().prepare(`
-      SELECT oi.product_name AS name, COALESCE(SUM(oi.quantity), 0) AS qty_sold,
+      SELECT oi.product_name AS name, COALESCE(SUM(CASE WHEN oi.unit_of_measure = 'kg' THEN 0 ELSE oi.quantity END), 0) AS qty_sold,
+        COALESCE(SUM(CASE WHEN oi.unit_of_measure = 'kg' THEN oi.quantity ELSE 0 END), 0) AS qty_sold_kg,
              COALESCE(SUM(oi.total), 0) AS revenue
         FROM order_items oi JOIN orders o ON o.id = oi.order_id JOIN bills b ON b.order_id = o.id
        WHERE b.payment_status = 'paid' AND date(COALESCE(b.paid_at, b.created_at)) BETWEEN date(?) AND date(?)

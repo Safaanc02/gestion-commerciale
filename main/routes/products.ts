@@ -2,6 +2,8 @@ import { Router, Request, Response } from 'express';
 import { getDatabase, now, generateShortId, getSettingValue } from '../db';
 import { requireRole, isBlockedSsrfTarget } from '../middleware/security';
 import { getActiveCountryPack, hasConfiguredTaxCategories } from '../services/tax';
+import { getScaleConfig } from '../services/scan-resolver';
+import { isUom, type Uom } from '../lib/units';
 import * as crypto from 'crypto';
 import * as dns from 'dns';
 import * as https from 'https';
@@ -253,6 +255,105 @@ function validateTaxCategoryId(categoryId: unknown): string | null {
   return null;
 }
 
+/**
+ * The five measurement columns move together: a product's unit dictates what
+ * precision and what scale item code are even meaningful. So rather than
+ * COALESCE each one independently — which lets a PATCH switch a product to
+ * 'kg' while leaving quantity_precision at 0, making every weighing round to
+ * a whole kilo — the effective group is resolved from body-or-existing and
+ * validated as a whole.
+ */
+interface MeasurementValues {
+  unit_of_measure: Uom;
+  quantity_precision: number;
+  plu_code: string | null;
+  tare_default: number;
+  max_quantity: number | null;
+}
+
+function resolveMeasurementFields(
+  db: any,
+  body: any,
+  existing: any | null,
+): { error: string } | { values: MeasurementValues } {
+  const pick = (key: string, fallback: any) => (key in (body ?? {}) ? body[key] : fallback);
+
+  const uomRaw = pick('unit_of_measure', existing?.unit_of_measure ?? 'unit');
+  if (!isUom(uomRaw)) {
+    return { error: `unit_of_measure must be one of: unit, kg` };
+  }
+  const unit_of_measure = uomRaw;
+  const weighed = unit_of_measure === 'kg';
+
+  // Carrying the stored precision forward is only meaningful while the unit
+  // stays the same. Switching a countable product to 'kg' must land on the
+  // gram, not inherit the 0 decimals it had as a countable item — which would
+  // otherwise round every weighing to a whole kilo (or, here, be rejected).
+  const sentPrecision = 'quantity_precision' in (body ?? {})
+    && body.quantity_precision !== null && body.quantity_precision !== undefined && body.quantity_precision !== '';
+  const unitUnchanged = existing != null && existing.unit_of_measure === unit_of_measure;
+  let quantity_precision = Number(
+    sentPrecision ? body.quantity_precision
+      : unitUnchanged && existing.quantity_precision != null ? existing.quantity_precision
+        : weighed ? 3 : 0
+  );
+  if (!Number.isInteger(quantity_precision)) {
+    return { error: 'quantity_precision must be a whole number' };
+  }
+  if (weighed) {
+    // 1 decimal is the coarsest a scale is worth reading; 3 is the gram, the
+    // finest the 5-digit label field can carry.
+    if (quantity_precision < 1 || quantity_precision > 3) {
+      return { error: 'quantity_precision must be between 1 and 3 for a product sold by weight' };
+    }
+  } else if (quantity_precision !== 0) {
+    // Not an error worth rejecting a whole save for: a countable product
+    // simply has no decimals, so normalise rather than argue.
+    quantity_precision = 0;
+  }
+
+  const sentPlu = 'plu_code' in (body ?? {});
+  let plu_code: string | null = sentPlu ? body.plu_code : (existing?.plu_code ?? null);
+  if (plu_code === '' || plu_code === undefined) plu_code = null;
+  // An explicitly supplied code on a countable product is a mistake worth
+  // reporting; one merely inherited while switching away from 'kg' is just
+  // stale, and is dropped so the code becomes free for another product.
+  if (plu_code !== null && !weighed && !sentPlu) plu_code = null;
+  if (plu_code !== null) {
+    plu_code = String(plu_code).trim();
+    if (!weighed) {
+      return { error: 'Only a product sold by weight can carry a scale item code (plu_code)' };
+    }
+    const expected = getScaleConfig(db).format.itemCodeLength;
+    if (!/^\d+$/.test(plu_code) || plu_code.length !== expected) {
+      return { error: `plu_code must be exactly ${expected} digits, to match the scale label layout` };
+    }
+  }
+
+  let tare_default = Number(pick('tare_default', existing?.tare_default ?? 0) ?? 0);
+  if (!Number.isFinite(tare_default) || tare_default < 0) {
+    return { error: 'tare_default must be a non-negative number' };
+  }
+  if (!weighed) tare_default = 0;
+
+  const maxRaw = pick('max_quantity', existing?.max_quantity ?? null);
+  let max_quantity: number | null = maxRaw === null || maxRaw === undefined || maxRaw === '' ? null : Number(maxRaw);
+  if (max_quantity !== null && (!Number.isFinite(max_quantity) || max_quantity <= 0)) {
+    return { error: 'max_quantity must be a positive number, or empty for no ceiling' };
+  }
+
+  return { values: { unit_of_measure, quantity_precision, plu_code, tare_default, max_quantity } };
+}
+
+/**
+ * Translate the v58 partial UNIQUE index into a 400 the shopkeeper can act on.
+ * The index — not this check — is the real guarantee; without the translation
+ * a duplicate PLU would surface as an opaque 500.
+ */
+function isPluCollision(error: any): boolean {
+  return String(error?.message || '').includes('UNIQUE constraint failed: products.plu_code');
+}
+
 function parseTags(raw: any): string[] {
   if (Array.isArray(raw)) return raw;
   if (typeof raw === 'string' && raw) {
@@ -270,6 +371,7 @@ router.get('/', (req: Request, res: Response) => {
     let query = `SELECT p.id, p.category_id, p.name, p.description, p.price, p.cost, p.sku, p.barcode,
       p.is_active, p.sort_order, p.track_inventory, p.stock_quantity, p.low_stock_threshold,
       p.tax_type, p.tax_rate, p.tax_category_id, p.tax_behavior, p.cb_percent, p.tags, p.deleted_at, p.created_at, p.updated_at,
+      p.unit_of_measure, p.quantity_precision, p.plu_code, p.tare_default, p.max_quantity,
       CASE WHEN p.image_url IS NULL OR p.image_url = '' THEN 0 ELSE 1 END AS has_image
       FROM products p 
       LEFT JOIN categories c ON p.category_id = c.id
@@ -573,6 +675,21 @@ router.post('/', requireRole('owner', 'manager'), (req: Request, res: Response) 
       }
     }
 
+    const measurement = resolveMeasurementFields(db, req.body, null);
+    if ('error' in measurement) return res.status(400).json({ error: measurement.error });
+
+    // Same shape as the barcode check above, and for the same reason: a scale
+    // label must resolve to exactly one product. The UNIQUE index added in v58
+    // is what actually guarantees it — this only produces a better message.
+    if (measurement.values.plu_code) {
+      const clash = db.prepare(
+        'SELECT id FROM products WHERE plu_code = ? AND deleted_at IS NULL'
+      ).get(measurement.values.plu_code);
+      if (clash) {
+        return res.status(400).json({ error: 'Another product already uses this scale item code' });
+      }
+    }
+
     const id = generateShortId('products');
 
     // Wrap product INSERT + addon_group INSERTs in a transaction
@@ -581,14 +698,17 @@ router.post('/', requireRole('owner', 'manager'), (req: Request, res: Response) 
       db.prepare(`
         INSERT INTO products (id, category_id, name, sku, barcode, description, price, cost,
           tax_type, tax_rate, tax_category_id, tax_behavior, track_inventory, stock_quantity, low_stock_threshold,
-          is_active, image_url, sort_order, cb_percent, tags, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          is_active, image_url, sort_order, cb_percent, tags,
+          unit_of_measure, quantity_precision, plu_code, tare_default, max_quantity, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `).run(
         id, category_id || null, name, sku || null, barcode || null, description || null, price, cost_price || 0,
         'none', 0, tax_category_id || null, tax_behavior || 'country_default',
         track_inventory ? 1 : 0, stock_quantity || 0, low_stock_threshold || 0,
         is_active !== false ? 1 : 0, image_url || null,
         sort_order || 0, cb_percent !== undefined ? cb_percent : null, JSON.stringify(tags || []),
+        measurement.values.unit_of_measure, measurement.values.quantity_precision,
+        measurement.values.plu_code, measurement.values.tare_default, measurement.values.max_quantity,
         now(), now()
       );
 
@@ -604,6 +724,9 @@ router.post('/', requireRole('owner', 'manager'), (req: Request, res: Response) 
     const product = db.prepare('SELECT * FROM products WHERE id = ?').get(id);
     res.status(201).json({ product });
   } catch (error: any) {
+    if (isPluCollision(error)) {
+      return res.status(400).json({ error: 'Another product already uses this scale item code' });
+    }
     console.error("[API] Internal error:", error);
     res.status(500).json({ error: "Internal server error" });
   }
@@ -657,6 +780,18 @@ router.put('/:id', requireRole('owner', 'manager'), (req: Request, res: Response
       }
     }
 
+    const measurement = resolveMeasurementFields(db, req.body, product);
+    if ('error' in measurement) return res.status(400).json({ error: measurement.error });
+
+    if (measurement.values.plu_code) {
+      const pluClash = db.prepare(
+        'SELECT id FROM products WHERE plu_code = ? AND deleted_at IS NULL AND id != ?'
+      ).get(measurement.values.plu_code, req.params.id);
+      if (pluClash) {
+        return res.status(400).json({ error: 'Another product already uses this scale item code' });
+      }
+    }
+
     // Detect whether client explicitly sent image_url (even as null/undefined)
     // so we can distinguish "don't touch image_url" from "clear image_url"
     const hasImageUrl = 'image_url' in req.body;
@@ -684,9 +819,18 @@ router.put('/:id', requireRole('owner', 'manager'), (req: Request, res: Response
         sort_order = COALESCE(@sort_order, sort_order),
         cb_percent = CASE WHEN @has_cb_percent = 1 THEN @cb_percent ELSE cb_percent END,
         tags = COALESCE(@tags, tags),
+        -- Written as a resolved group, not COALESCEd one by one: these five
+        -- constrain each other, so a partial update would leave incoherent
+        -- combinations like unit_of_measure='kg' with quantity_precision=0.
+        unit_of_measure = @unit_of_measure,
+        quantity_precision = @quantity_precision,
+        plu_code = @plu_code,
+        tare_default = @tare_default,
+        max_quantity = @max_quantity,
         updated_at = @updated_at
       WHERE id = @id
     `).run({
+      ...measurement.values,
       category_id, name, sku, barcode, description, price, cost: cost_price,
       tax_category_id, tax_behavior,
       has_tax_category_id: hasTaxCategoryId ? 1 : 0,
@@ -720,6 +864,9 @@ router.put('/:id', requireRole('owner', 'manager'), (req: Request, res: Response
     const updated = db.prepare('SELECT * FROM products WHERE id = ?').get(req.params.id);
     res.json({ product: updated });
   } catch (error: any) {
+    if (isPluCollision(error)) {
+      return res.status(400).json({ error: 'Another product already uses this scale item code' });
+    }
     console.error("[API] Internal error:", error);
     res.status(500).json({ error: "Internal server error" });
   }

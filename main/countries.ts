@@ -34,6 +34,11 @@ interface Row {
 }
 
 const SUPPORTED: Record<string, Row> = {
+  MA: { locale: 'fr-MA', currency: 'MAD', tz: 'Africa/Casablanca',               taxIdLabel: 'ICE',   taxName: 'TVA',
+    taxIdFormat: {
+      pattern: '^[0-9]{15}$',
+      description: "15 chiffres : 9 pour l'entreprise + 4 pour l'établissement + 2 de clé (ex. 001234567000042)",
+    } },
   IN: { locale: 'en-IN', currency: 'INR', tz: 'Asia/Kolkata',                    taxIdLabel: 'GSTIN', taxName: 'GST',
     taxIdFormat: {
       pattern: '^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$',
@@ -93,6 +98,10 @@ function build(code: string): Country {
 export const COUNTRIES: Country[] = Object.keys(SUPPORTED)
   .map(build)
   .sort((a, b) => {
+    // MA first: this fork targets Moroccan retail, so the setup screen should
+    // open on it rather than on upstream's India/Argentina priority order.
+    if (a.code === 'MA') return -1;
+    if (b.code === 'MA') return 1;
     if (a.code === 'IN') return -1;
     if (b.code === 'IN') return 1;
     if (a.code === 'AR') return -1;
@@ -105,8 +114,22 @@ export const getCountryByCode = (code: string): Country | undefined => {
   return COUNTRIES.find((c) => c.code === code.toUpperCase());
 };
 
+/**
+ * What a shop actually writes, where CLDR's rendering isn't it.
+ *
+ * CLDR has no short form for the Moroccan dirham, so every locale falls back
+ * to the ISO code "MAD" — but no price tag, receipt or shop sign in Morocco
+ * says that; they all say "DH". It is also two characters instead of three,
+ * which matters on a 58mm receipt where the amount column is already tight.
+ */
+const CURRENCY_DISPLAY_OVERRIDES: Record<string, string> = {
+  MAD: 'DH',
+};
+
 export const getCurrencySymbol = (currency: string, locale = 'en-US'): string => {
   if (!currency) return currency;
+  const override = CURRENCY_DISPLAY_OVERRIDES[currency.toUpperCase()];
+  if (override) return override;
   try {
     return new Intl.NumberFormat(locale, { style: 'currency', currency, currencyDisplay: 'narrowSymbol' })
       .formatToParts(0)
@@ -119,7 +142,14 @@ export const getCurrencySymbol = (currency: string, locale = 'en-US'): string =>
 export const formatCurrency = (amount: number, currency: string, locale = 'en-US'): string => {
   if (!currency) return amount.toFixed(2);
   try {
-    return new Intl.NumberFormat(locale, { style: 'currency', currency, currencyDisplay: 'narrowSymbol' }).format(amount);
+    const parts = new Intl.NumberFormat(locale, { style: 'currency', currency, currencyDisplay: 'narrowSymbol' })
+      .formatToParts(amount);
+    const override = CURRENCY_DISPLAY_OVERRIDES[currency.toUpperCase()];
+    // Swapping the currency PART rather than the finished string keeps the
+    // locale's own grouping, decimal separator and symbol placement intact.
+    return parts
+      .map((part) => (override && part.type === 'currency' ? override : part.value))
+      .join('');
   } catch {
     return `${currency} ${amount.toFixed(2)}`;
   }

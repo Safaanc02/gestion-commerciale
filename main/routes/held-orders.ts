@@ -3,6 +3,7 @@ import { getDatabase, now, withTxn } from '../db';
 import { requireRole } from '../middleware/security';
 import { randomUUID } from 'crypto';
 import { validateItemNotes, validateOrderNotes } from './orders-validation';
+import { hasAllowedPrecision, isWeighed } from '../lib/units';
 
 const router = Router();
 
@@ -39,7 +40,21 @@ function validateHeldOrderItem(item: unknown, db: any): void {
   if (!isRecord(item.product) || !isValidIdentifier(item.product.id)) {
     throw new Error('Each held-order item must have a valid product');
   }
-  if (!Number.isSafeInteger(item.quantity) || item.quantity <= 0) {
+  // A held order is a suspended cart, so it has to accept exactly what the
+  // cart accepts — including a weighed 0.734 kg. This was the only hard server
+  // refusal of a decimal quantity left. The product decides which rule applies;
+  // an unknown product falls back to whole numbers rather than opening up.
+  if (typeof item.quantity !== 'number' || !Number.isFinite(item.quantity) || item.quantity <= 0) {
+    throw new Error('Each held-order item must have a positive quantity');
+  }
+  const measured = db?.prepare?.('SELECT unit_of_measure, quantity_precision FROM products WHERE id = ?')
+    .get(String((item.product as any).id)) as { unit_of_measure?: string; quantity_precision?: number } | undefined;
+  if (isWeighed(measured?.unit_of_measure)) {
+    const precision = Number.isInteger(measured?.quantity_precision) ? measured!.quantity_precision! : 3;
+    if (!hasAllowedPrecision(item.quantity, precision)) {
+      throw new Error(`Each held-order item weighed by the kilo must have at most ${precision} decimal places`);
+    }
+  } else if (!Number.isSafeInteger(item.quantity)) {
     throw new Error('Each held-order item must have a positive integer quantity');
   }
   if (!Array.isArray(item.addons) || item.addons.some((addon: unknown) => !isRecord(addon) || !isValidIdentifier(addon.id))) {

@@ -5,6 +5,13 @@ import { googleDrive } from '../services/google-drive';
 import { requireRole } from '../middleware/security';
 import { requireMasterPin } from '../middleware/master-pin';
 import { resolveTaxIdFormat, validateTaxRegistrationNumber } from '../services/tax';
+import {
+  DEFAULT_SCALE_LABEL_FORMAT,
+  encodeScaleLabel,
+  isValidScaleLabelFormat,
+  type ScaleLabelFormat,
+} from '../lib/scale-barcode';
+import { getScaleConfig } from '../services/scan-resolver';
 
 const router = Router();
 
@@ -256,6 +263,8 @@ router.get('/discount', requireRole('owner', 'manager', 'cashier', 'waiter', 'ch
   try {
     const s = getAllSettings(getDatabase());
     res.json({
+      // Off unless explicitly enabled: a grocery sells at the shelf price.
+      discount_enabled: s.discount_enabled === 'true' || s.discount_enabled === '1',
       discount_max_percentage: parseFloat(s.discount_max_percentage || '25'),
       discount_max_amount: parseFloat(s.discount_max_amount || '0'),
       discount_mode: s.discount_mode || 'percentage',
@@ -270,6 +279,7 @@ router.get('/discount', requireRole('owner', 'manager', 'cashier', 'waiter', 'ch
 router.put('/discount', requireRole('owner', 'manager'), (req: Request, res: Response) => {
   try {
     const {
+      discount_enabled,
       discount_max_percentage,
       discount_max_amount,
       discount_mode,
@@ -295,6 +305,7 @@ router.put('/discount', requireRole('owner', 'manager'), (req: Request, res: Res
 
     const db = getDatabase();
     upsertSettings(db, {
+      discount_enabled: boolFlag(discount_enabled),
       discount_max_percentage,
       discount_max_amount,
       discount_mode,
@@ -302,6 +313,7 @@ router.put('/discount', requireRole('owner', 'manager'), (req: Request, res: Res
     });
     const s = getAllSettings(db);
     res.json({
+      discount_enabled: s.discount_enabled === 'true' || s.discount_enabled === '1',
       discount_max_percentage: parseFloat(s.discount_max_percentage || '25'),
       discount_max_amount: parseFloat(s.discount_max_amount || '0'),
       discount_mode: s.discount_mode || 'percentage',
@@ -319,6 +331,122 @@ router.put('/discount', requireRole('owner', 'manager'), (req: Request, res: Res
 // on the KDS server (different origin) and isn't reachable from the
 // dashboard's settings page. This is the dashboard-side mirror — read-only
 // from the client's perspective; the PUT below is the only mutator.
+// ── Scale labels ───────────────────────────────────────────────────────────
+// Declared here, among the other named routes, because Express matches in
+// declaration order: put after '/:key' and the wildcard would swallow it.
+//
+// Writing goes through this route rather than PUT /settings/:key on purpose —
+// that handler whitelists the KEY but never inspects the VALUE, so an
+// incoherent layout (offsets running past the 12 data digits) would be stored
+// happily and then break every single scan.
+
+router.get('/scale', requireRole('owner', 'manager', 'cashier', 'waiter'), (_req: Request, res: Response) => {
+  try {
+    // Already parsed and validated, with a fallback to the shipped default, so
+    // the till never has to JSON.parse a setting for itself.
+    const { enabled, format } = getScaleConfig(getDatabase());
+    res.json({ enabled, format });
+  } catch (error: any) {
+    console.error("[API] Internal error:", error);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+router.put('/scale', requireRole('owner', 'manager'), (req: Request, res: Response) => {
+  try {
+    const { enabled, format } = req.body ?? {};
+    if (enabled !== undefined && typeof enabled !== 'boolean') {
+      return res.status(400).json({ error: 'enabled must be true or false' });
+    }
+
+    const db = getDatabase();
+    const current = getScaleConfig(db);
+    let nextFormat: ScaleLabelFormat = current.format;
+
+    if (format !== undefined) {
+      if (!format || typeof format !== 'object') {
+        return res.status(400).json({ error: 'format must be an object' });
+      }
+      const candidate: ScaleLabelFormat = {
+        prefixes: Array.isArray(format.prefixes) ? format.prefixes.map((p: unknown) => String(p)) : [],
+        itemCodeStart: Number(format.itemCodeStart),
+        itemCodeLength: Number(format.itemCodeLength),
+        valueStart: Number(format.valueStart),
+        valueLength: Number(format.valueLength),
+        embeds: format.embeds === 'price' ? 'price' : 'weight',
+        divisor: Number(format.divisor),
+        verifyCheckDigit: format.verifyCheckDigit !== false,
+      };
+      if (!isValidScaleLabelFormat(candidate)) {
+        return res.status(400).json({
+          error: 'This label layout is not usable: the item and value fields must be positive and fit within the first 12 digits of an EAN-13',
+        });
+      }
+      // Overlapping fields decode without error but produce nonsense — the
+      // item code and the weight would share digits.
+      const itemEnd = candidate.itemCodeStart + candidate.itemCodeLength;
+      const valueEnd = candidate.valueStart + candidate.valueLength;
+      if (candidate.itemCodeStart < valueEnd && candidate.valueStart < itemEnd) {
+        return res.status(400).json({ error: 'The item code and value fields overlap' });
+      }
+      nextFormat = candidate;
+    }
+
+    const nextEnabled = enabled === undefined ? current.enabled : enabled;
+    // Turning decoding on with a layout that cannot round-trip would bill wrong
+    // weights, so prove it first with the same encoder the settings screen uses
+    // for its preview.
+    if (nextEnabled) {
+      const sample = encodeScaleLabel('0'.repeat(nextFormat.itemCodeLength), 1, nextFormat);
+      if (!sample) {
+        return res.status(400).json({ error: 'This label layout cannot produce a valid barcode' });
+      }
+    }
+
+    const write = db.prepare(
+      `INSERT INTO settings (key, value, updated_at) VALUES (?, ?, ?)
+       ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at`
+    );
+    write.run('scale_labels_enabled', nextEnabled ? 'true' : 'false', now());
+    write.run('scale_label_format', JSON.stringify(nextFormat), now());
+
+    res.json({ enabled: nextEnabled, format: nextFormat });
+  } catch (error: any) {
+    console.error("[API] Internal error:", error);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+/**
+ * Build the label this layout would produce for a given item code and value —
+ * the shopkeeper compares it against a real printed label to confirm the
+ * layout before enabling decoding. This is the check that stands between the
+ * store and a scale whose weight field is offset by one digit, which would
+ * bill a tenfold weight while keeping a perfectly valid EAN-13 check digit.
+ */
+router.post('/scale/preview', requireRole('owner', 'manager'), (req: Request, res: Response) => {
+  try {
+    const { item_code, value, format } = req.body ?? {};
+    const layout: ScaleLabelFormat = format && typeof format === 'object'
+      ? { ...DEFAULT_SCALE_LABEL_FORMAT, ...format }
+      : getScaleConfig(getDatabase()).format;
+    const raw = Number(value);
+    if (!Number.isFinite(raw) || raw <= 0) {
+      return res.status(400).json({ error: 'value must be a positive number (grams, or minor currency units)' });
+    }
+    const barcode = encodeScaleLabel(String(item_code ?? ''), raw, layout);
+    if (!barcode) {
+      return res.status(400).json({
+        error: `Could not build a label: item_code must be exactly ${layout.itemCodeLength} digits and the layout must be valid`,
+      });
+    }
+    res.json({ barcode, format: layout });
+  } catch (error: any) {
+    console.error("[API] Internal error:", error);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
 router.get('/kds', (_req: Request, res: Response) => {
   try {
     const s = getAllSettings(getDatabase());

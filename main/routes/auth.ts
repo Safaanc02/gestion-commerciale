@@ -27,7 +27,10 @@ function dialCodeFor(country: string | undefined): string {
 }
 
 const INITIAL_ADMIN_ROLE = 'owner';
-const VALID_BUSINESS_TYPES = new Set(['restaurant']);
+// 'retail' is this fork's own case — a grocery till selling packaged goods and
+// bulk food by weight. 'restaurant' stays accepted: the table, kitchen-display
+// and add-on screens still work, and nothing about them was removed.
+const VALID_BUSINESS_TYPES = new Set(['restaurant', 'retail']);
 const VALID_SETUP_PROFILES = new Set(['empty', 'express', 'demo']);
 const VALID_SERVICE_MODELS = new Set(['qsr', 'finedine']);
 const LOCAL_SETUP_HOSTS = new Set(['127.0.0.1', '::1', '::ffff:127.0.0.1']);
@@ -338,6 +341,35 @@ function resetSuccessfulLogin(ip: string) {
 }
 // ─────────────────────────────────────────────────────────────────────────────
 
+/**
+ * The payload a successful sign-in returns, whatever the credential used.
+ *
+ * Shared by the PIN and the email paths so the two can never drift into
+ * issuing differently-shaped tokens — the sort of divergence that only shows
+ * up as one login method mysteriously failing a permission check.
+ */
+function buildLoginResponse(db: ReturnType<typeof getDatabase>, user: any, remember: boolean) {
+  const token = jwt.sign(
+    { userId: user.id, email: user.email, role: user.role, remember, jti: uuidv4() },
+    getJWTSecret(),
+    { expiresIn: expiresInFor(remember) }
+  );
+  return {
+    access_token: token,
+    token_type: 'bearer',
+    expires_in: remember ? JWT_REMEMBER_EXPIRES_IN_SECONDS : 86400,
+    user: {
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      role: user.role,
+      category_ids: parseCategoryIds(user.category_ids),
+    },
+    // Single tenant — frontend auto-selects when tenants.length === 1
+    tenants: [buildLocalTenant(db, user.role)],
+  };
+}
+
 // ── POST /api/auth/login ──────────────────────────────────────────────────────
 
 router.post('/login', authRateLimit(), async (req: Request, res: Response) => {
@@ -349,13 +381,51 @@ router.post('/login', authRateLimit(), async (req: Request, res: Response) => {
     }
 
     const email = normalizeEmail(req.body?.email);
-    const { password, rememberMe } = req.body || {};
+    const { password, rememberMe, pin } = req.body || {};
+    const db = getDatabase();
+
+    // ── PIN sign-in ───────────────────────────────────────────────────────
+    // How staff actually get in: a keypad on a touch screen, not an email
+    // address and a password typed on a counter between customers. The PIN is
+    // matched against every active user that has one, because the cashier
+    // enters only the code — there is no username to narrow it down first.
+    //
+    // The IP rate limit above is what makes a short PIN acceptable here; it is
+    // applied before any comparison, so a brute-force run is stopped after a
+    // handful of tries rather than throttled per account.
+    if (pin !== undefined && !email) {
+      const candidate = String(pin).trim();
+      if (!/^\d{4,8}$/.test(candidate)) {
+        return res.status(400).json({ error: 'PIN must be 4 to 8 digits' });
+      }
+      const holders = db.prepare(
+        `SELECT * FROM users WHERE is_active = 1 AND pin_hash IS NOT NULL AND pin_hash != ''`
+      ).all() as any[];
+
+      let matched: any = null;
+      for (const holder of holders) {
+        try {
+          if (await bcrypt.compare(candidate, holder.pin_hash)) { matched = holder; break; }
+        } catch {
+          // A corrupt hash on one user must not lock everybody out.
+        }
+      }
+      if (!matched) {
+        const attemptsRemaining = incrementFailedLogin(ip);
+        return res.status(401).json({
+          error: 'Invalid PIN',
+          attempts_remaining: attemptsRemaining,
+          lockout_minutes: attemptsRemaining === 0 ? LOCKOUT_MINUTES : undefined,
+        });
+      }
+      resetSuccessfulLogin(ip);
+      return res.json(buildLoginResponse(db, matched, !!rememberMe));
+    }
 
     if (!email || !password) {
       return res.status(400).json({ error: 'Email and password required' });
     }
 
-    const db = getDatabase();
     const user = db.prepare('SELECT * FROM users WHERE email = ? AND is_active = 1').get(email) as any;
     let passwordMatches = false;
     if (user) {
@@ -376,30 +446,7 @@ router.post('/login', authRateLimit(), async (req: Request, res: Response) => {
     }
 
     resetSuccessfulLogin(ip);
-
-    const remember = !!rememberMe;
-    const token = jwt.sign(
-      { userId: user.id, email: user.email, role: user.role, remember, jti: uuidv4() },
-      getJWTSecret(),
-      { expiresIn: expiresInFor(remember) }
-    );
-
-    const tenant = buildLocalTenant(db, user.role);
-
-    res.json({
-      access_token: token,
-      token_type: 'bearer',
-      expires_in: remember ? JWT_REMEMBER_EXPIRES_IN_SECONDS : 86400,
-      user: {
-        id: user.id,
-        name: user.name,
-        email: user.email,
-        role: user.role,
-        category_ids: parseCategoryIds(user.category_ids),
-      },
-      // Single tenant — frontend auto-selects when tenants.length === 1
-      tenants: [tenant],
-    });
+    res.json(buildLoginResponse(db, user, !!rememberMe));
   } catch (error: any) {
     console.error('[Auth] Login error:', error);
     console.error("[API] Internal error:", error);
@@ -757,15 +804,34 @@ router.post('/setup/initialize', (req: Request, res: Response) => {
     const resolvedStoreName = storeName || 'Store';
     const outletAddress = String(business_address || address || '').trim();
     const outletPhone = String(business_phone || phone || '').trim();
-    if (!displayName || !email || !password) {
-      return res.status(400).json({ error: 'Name, email, and password are required' });
-    }
-    if (!validatePassword(password)) {
-      return res.status(400).json({ error: 'Password must be at least 8 characters long and contain at least one uppercase letter, one lowercase letter, and one number.' });
-    }
+    // ── Owner credential ──────────────────────────────────────────────
+    // A shop till is signed into with a keypad, so setup asks for a PIN and
+    // nothing else. No email, no password, no account to remember: the staff
+    // who use this machine stand at a counter, and a login form is friction
+    // they pay for on every shift.
+    //
+    // A user row still needs an email and a password because the rest of the
+    // system keys off them (JWT subject, staff management, password change).
+    // Both are generated: the email is a local placeholder, the password is
+    // random and never shown to anyone, so it cannot become a weak second way
+    // in. The owner can set real credentials later from the Staff screen.
+    const ownerPin = String(req.body?.owner_pin ?? '').trim();
+    const usePinSetup = ownerPin.length > 0 || (!email && !password);
 
-    if (!isValidEmail(email)) {
-      return res.status(400).json({ error: 'A valid email is required' });
+    if (usePinSetup) {
+      if (!/^\d{4,8}$/.test(ownerPin)) {
+        return res.status(400).json({ error: 'A 4 to 8 digit PIN is required' });
+      }
+    } else {
+      if (!displayName || !email || !password) {
+        return res.status(400).json({ error: 'Name, email, and password are required' });
+      }
+      if (!validatePassword(password)) {
+        return res.status(400).json({ error: 'Password must be at least 8 characters long and contain at least one uppercase letter, one lowercase letter, and one number.' });
+      }
+      if (!isValidEmail(email)) {
+        return res.status(400).json({ error: 'A valid email is required' });
+      }
     }
 
     if (terms_accepted !== true) {
@@ -808,7 +874,18 @@ router.post('/setup/initialize', (req: Request, res: Response) => {
     }
 
     let userId = '';
-    const hashedPassword = bcrypt.hashSync(password, 10);
+    // In PIN setup the password is random and never disclosed: it exists only
+    // because the users table requires one. The PIN is the credential.
+    const ownerEmail = usePinSetup ? (email || 'proprietaire@local') : email;
+    // The owner's name is data, not a translated label: it is written once at
+    // setup and then displayed everywhere, so a hardcoded French default sat
+    // untranslated in the sidebar of an Arabic interface. Setup already knows
+    // which language was picked on the first screen.
+    const DEFAULT_OWNER_NAME: Record<string, string> = { ar: 'المالك', fr: 'Propriétaire' };
+    const ownerName = displayName || DEFAULT_OWNER_NAME[String(language ?? '')] || 'Owner';
+    const ownerPassword = usePinSetup ? randomBytes(24).toString('hex') : password;
+    const hashedPassword = bcrypt.hashSync(ownerPassword, 10);
+    const hashedOwnerPin = usePinSetup ? bcrypt.hashSync(ownerPin, 10) : null;
 
     // Persist the external Master PIN before committing the owner transaction.
     // A keyring/filesystem failure must leave setup retryable rather than
@@ -823,16 +900,17 @@ router.post('/setup/initialize', (req: Request, res: Response) => {
         throw new Error('Setup already complete. This endpoint is disabled.');
       }
 
-      const existingUser = db.prepare('SELECT id FROM users WHERE email = ?').get(email);
+      const existingUser = db.prepare('SELECT id FROM users WHERE email = ?').get(ownerEmail);
       if (existingUser) {
         throw new Error('User with this email already exists');
       }
 
       userId = uuidv4();
       db.prepare(`
-        INSERT INTO users (id, name, email, password, role, is_active, terms_accepted_at, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `).run(userId, displayName, email, hashedPassword, INITIAL_ADMIN_ROLE, 1, now(), now(), now());
+        INSERT INTO users (id, name, email, password, pin_hash, role, is_active, terms_accepted_at, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(userId, ownerName, ownerEmail, hashedPassword, hashedOwnerPin,
+        INITIAL_ADMIN_ROLE, 1, now(), now(), now());
 
       upsertSettings(db, {
         business_name: resolvedStoreName,

@@ -111,23 +111,31 @@ router.get('/daily-stats', requireRole('owner', 'manager'), (req: Request, res: 
     `).get(start, end) as { sales: number };
     const paymentMethodsToday = paymentMethodBreakdown(db, today) as { total: number }[];
 
-    const runningOrders = db.prepare(`
-      SELECT COUNT(*) as count FROM orders WHERE status IN ('pending', 'preparing')
-    `).get() as { count: number };
+    // Tickets rung up today. A grocery has no "running" or "pending" order:
+    // the customer pays and leaves, so the count that means something is how
+    // many sales were made — not how many are still in the kitchen.
+    const ticketsToday = db.prepare(`
+      SELECT COUNT(*) as count FROM bills WHERE created_at >= ? AND created_at < ?
+    `).get(start, end) as { count: number };
 
-    const pendingOrders = db.prepare(`
-      SELECT COUNT(*) as count FROM orders WHERE status = 'pending'
-    `).get() as { count: number };
-
-    const tablesOccupied = db.prepare(`
-      SELECT COUNT(*) as count FROM tables WHERE status = 'occupied'
+    // What a shopkeeper actually watches: what is about to run out. It
+    // replaces the occupied-tables tile, which counts something this shop
+    // does not have.
+    const lowStock = db.prepare(`
+      SELECT COUNT(*) as count FROM products
+      WHERE track_inventory = 1 AND deleted_at IS NULL AND is_active = 1
+        AND stock_quantity <= low_stock_threshold
     `).get() as { count: number };
 
     res.json({
       sales: salesToday.sales,
-      runningOrders: runningOrders.count,
-      pendingOrders: pendingOrders.count,
-      tablesOccupied: tablesOccupied.count,
+      ticketsToday: ticketsToday.count,
+      lowStockCount: lowStock.count,
+      // Kept so an existing dashboard build does not break mid-upgrade; a
+      // grocery reads 0 for all three.
+      runningOrders: 0,
+      pendingOrders: 0,
+      tablesOccupied: 0,
       paymentMethods: paymentMethodsToday,
     });
   } catch (error: any) {
@@ -310,14 +318,19 @@ router.get('/topProducts', requireRole('owner', 'manager'), (req: Request, res: 
 
     const topProducts = db.prepare(`
       SELECT oi.product_id, oi.product_name,
-        SUM(oi.quantity) as total_quantity,
+        -- Split by unit: adding 0.734 kg of lentils to 3 tins of tuna gives a
+        -- number that means nothing. Revenue is the only figure that stays
+        -- additive across a mixed catalogue, so it is what ranks the list.
+        SUM(CASE WHEN oi.unit_of_measure = 'kg' THEN 0 ELSE oi.quantity END) as total_units,
+        SUM(CASE WHEN oi.unit_of_measure = 'kg' THEN oi.quantity ELSE 0 END) as total_kg,
+        MAX(oi.unit_of_measure) as unit_of_measure,
         SUM(oi.subtotal) as total_revenue,
         COUNT(DISTINCT oi.order_id) as order_count
       FROM order_items oi
       JOIN orders o ON oi.order_id = o.id
       WHERE o.created_at >= ? AND o.created_at < ?
       GROUP BY oi.product_id
-      ORDER BY total_quantity DESC
+      ORDER BY total_revenue DESC
       LIMIT ?
     `).all(windowStart, windowEnd, limit);
 
@@ -472,7 +485,9 @@ router.get('/insights', requireRole('owner', 'manager'), (req: Request, res: Res
     // Top categories by revenue.
     const topCategories = db.prepare(`
       SELECT c.id as category_id, COALESCE(c.name, 'Uncategorized') as name,
-        COALESCE(SUM(oi.quantity), 0) as quantity,
+        -- See topProducts: quantities are only summed within one unit.
+        COALESCE(SUM(CASE WHEN oi.unit_of_measure = 'kg' THEN 0 ELSE oi.quantity END), 0) as quantity,
+        COALESCE(SUM(CASE WHEN oi.unit_of_measure = 'kg' THEN oi.quantity ELSE 0 END), 0) as quantity_kg,
         COALESCE(SUM(oi.subtotal), 0) as revenue
       FROM order_items oi
       JOIN orders o ON o.id = oi.order_id

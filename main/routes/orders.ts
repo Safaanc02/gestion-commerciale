@@ -13,8 +13,177 @@ import { notifyKdsUpdate, notifyOrderUpdated } from '../services/kds';
 import { cloudSync } from '../services/cloud-sync';
 import { validateOrderNotes, validateItemNotes } from './orders-validation';
 import { requireRole } from '../middleware/security';
+import { resolveScan } from '../services/scan-resolver';
+import { hasAllowedPrecision, isUom, isWeighed, roundMoney, type Uom } from '../lib/units';
 
 const router = Router();
+
+/**
+ * How a cart line was measured, resolved server-side.
+ *
+ * When the client supplies `scan_raw`, the quantity it also sent is thrown
+ * away and the label is decoded again here — the same stance the discount
+ * handling already takes with client-supplied amounts (see the vuln-0002
+ * comment further down). A till that is stale, wrong or tampered with cannot
+ * choose what the customer is billed for.
+ */
+interface LineMeasurement {
+  quantity: number;
+  unitOfMeasure: Uom;
+  quantitySource: 'unit' | 'scale_label' | 'price_derived' | 'manual_weight';
+  amountSource: 'computed' | 'label_price';
+  scanRaw: string | null;
+  /** Set only when the label carried the price; it must not be recomputed. */
+  authoritativeAmount: number | null;
+}
+
+/**
+ * A rejection the caller caused and can fix, so the till shows the reason
+ * instead of "Internal server error". The order handlers already honour
+ * `statusCode` on a thrown error; plain Errors fall through to a 500.
+ */
+function badRequest(message: string): Error & { statusCode: number } {
+  return Object.assign(new Error(message), { statusCode: 400 });
+}
+
+function resolveLineMeasurement(db: any, product: any, item: any): LineMeasurement {
+  const uom: Uom = isUom(product.unit_of_measure) ? product.unit_of_measure : 'unit';
+  const precision = Number.isInteger(product.quantity_precision)
+    ? product.quantity_precision
+    : (uom === 'kg' ? 3 : 0);
+
+  const scanRaw = typeof item.scan_raw === 'string' && item.scan_raw.trim() ? item.scan_raw.trim() : null;
+  if (scanRaw) {
+    const outcome = resolveScan(db, scanRaw);
+    if (outcome.kind !== 'weighed') {
+      throw badRequest(`Scale label ${scanRaw} could not be read${outcome.kind === 'rejected' ? ` (${outcome.reason})` : ''}`);
+    }
+    if (outcome.product.id !== product.id) {
+      throw badRequest(`Scale label ${scanRaw} belongs to a different product than ${product.name}`);
+    }
+    const measure = outcome.measure;
+    return {
+      quantity: measure.quantity,
+      unitOfMeasure: measure.unit_of_measure,
+      quantitySource: measure.quantity_source,
+      amountSource: measure.amount_source,
+      scanRaw,
+      authoritativeAmount: measure.amount_source === 'label_price' ? measure.amount : null,
+    };
+  }
+
+  const quantity = Number(item.quantity);
+  if (!(quantity > 0) || !Number.isFinite(quantity)) {
+    throw badRequest(`Invalid quantity for ${product.name}: must be a positive number`);
+  }
+  if (isWeighed(uom)) {
+    // Tightening, not loosening: the previous check accepted any finite
+    // positive number, so 0.7341234567 kg went straight through.
+    if (!hasAllowedPrecision(quantity, precision)) {
+      throw badRequest(`Invalid quantity for ${product.name}: at most ${precision} decimal places`);
+    }
+    if (product.max_quantity != null && quantity > Number(product.max_quantity)) {
+      throw badRequest(`Quantity for ${product.name} exceeds its ${product.max_quantity} kg per-line limit`);
+    }
+  } else if (!Number.isInteger(quantity)) {
+    throw badRequest(`Invalid quantity for ${product.name}: must be a whole number`);
+  }
+
+  return {
+    quantity,
+    unitOfMeasure: uom,
+    quantitySource: isWeighed(uom) ? 'manual_weight' : 'unit',
+    amountSource: 'computed',
+    scanRaw: null,
+    authoritativeAmount: null,
+  };
+}
+
+
+/**
+ * The unit price a line is charged at.
+ *
+ * The catalogue price wins by default, exactly as before. A cashier may key a
+ * different one — shelf prices move faster than a catalogue — but it is
+ * bounded and recorded rather than silently trusted: `original_unit_price`
+ * keeps what the catalogue said, so an undercharge can be told apart from a
+ * price that had genuinely been updated.
+ */
+function resolveUnitPrice(
+  db: any,
+  product: any,
+  item: any,
+): { unitPrice: number; originalUnitPrice: number | null; overridden: boolean } {
+  const cataloguePrice = parseFloat(product.price);
+  const raw = item?.unit_price;
+  if (raw === undefined || raw === null || raw === '') {
+    return { unitPrice: cataloguePrice, originalUnitPrice: null, overridden: false };
+  }
+
+  const enabled = getSettingValue('price_override_enabled') !== 'false';
+  if (!enabled) {
+    throw badRequest('Changing a price at the till is disabled for this shop');
+  }
+
+  const keyed = Number(raw);
+  if (!Number.isFinite(keyed) || keyed < 0) {
+    throw badRequest(`Invalid price for ${product.name}`);
+  }
+  // Same value as the catalogue: not an override, just the till echoing back
+  // what it was shown.
+  if (roundMoney(keyed) === roundMoney(cataloguePrice)) {
+    return { unitPrice: cataloguePrice, originalUnitPrice: null, overridden: false };
+  }
+
+  const maxPercent = parseFloat(getSettingValue('price_override_max_percent') || '200');
+  if (maxPercent > 0 && cataloguePrice > 0) {
+    const deviation = Math.abs(keyed - cataloguePrice) / cataloguePrice * 100;
+    if (deviation > maxPercent) {
+      throw badRequest(
+        `Price for ${product.name} is more than ${maxPercent}% away from the catalogue price — check the decimal point`
+      );
+    }
+  }
+
+  return { unitPrice: roundMoney(keyed), originalUnitPrice: cataloguePrice, overridden: true };
+}
+
+/**
+ * Line amount before discount and tax.
+ *
+ * Rounded to the currency here, once. Left unrounded, a weighed line carries
+ * the price's 2 decimals times the weight's 3 and lands on 5, so the printed
+ * line amounts stop adding up to the printed subtotal — bills.ts copies
+ * order.subtotal onto the invoice verbatim.
+ */
+function computeLineSubtotal(
+  measurement: LineMeasurement,
+  unitPrice: number,
+  addons: any[] | undefined,
+  itemDiscount: number,
+): number {
+  let amount = measurement.authoritativeAmount != null
+    ? measurement.authoritativeAmount
+    : unitPrice * measurement.quantity;
+
+  if (Array.isArray(addons)) {
+    for (const addon of addons) {
+      if (!addon) continue;
+      if (addon.quantity !== undefined) {
+        if (typeof addon.quantity !== 'number' || !Number.isInteger(addon.quantity) || addon.quantity <= 0) {
+          throw badRequest(`Invalid add-on quantity for ${addon.name || 'addon'}: must be a positive integer`);
+        }
+      }
+      const addonQty = addon.quantity || 1;
+      // An add-on is a countable extra, so it is NOT multiplied by a weight:
+      // charging it per kilo would bill 0.734 of an add-on on one line and 3
+      // of it on the next.
+      amount += (addon.price || 0) * addonQty * (isWeighed(measurement.unitOfMeasure) ? 1 : measurement.quantity);
+    }
+  }
+
+  return roundMoney(Math.max(0, amount - itemDiscount));
+}
 const MAX_ORDER_IDEMPOTENCY_KEY_LENGTH = 128;
 
 function orderIdempotencyKey(req: Request): string | null {
@@ -49,12 +218,16 @@ function syncCustomerTagCounts(db: any, customerId: string, items: { product_id:
   let counts: Record<string, number> = {};
   try { counts = row.tag_counts ? JSON.parse(row.tag_counts) : {}; } catch { counts = {}; }
   for (const item of items) {
-    const product = db.prepare('SELECT tags FROM products WHERE id = ?').get(item.product_id) as any;
+    const product = db.prepare('SELECT tags, unit_of_measure FROM products WHERE id = ?').get(item.product_id) as any;
     if (!product?.tags) continue;
     let tags: string[] = [];
     try { tags = JSON.parse(product.tags); } catch { continue; }
+    // These counts drive the customer preference badges, which are a count of
+    // purchases — a weighed line counts once, or a badge would read "rice
+    // 2.202" instead of "rice 3".
+    const increment = isWeighed(product.unit_of_measure) ? 1 : (item.quantity || 1);
     for (const tag of tags) {
-      if (tag && typeof tag === 'string') counts[tag] = (counts[tag] || 0) + (item.quantity || 1);
+      if (tag && typeof tag === 'string') counts[tag] = (counts[tag] || 0) + increment;
     }
   }
   db.prepare('UPDATE customers SET tag_counts = ?, updated_at = ? WHERE id = ?')
@@ -413,8 +586,10 @@ router.post('/', requireRole('owner', 'manager', 'cashier', 'waiter'), (req: Req
       const insertItem = db.prepare(`
         INSERT INTO order_items (order_id, product_id, product_name, product_sku, unit_price, quantity,
           subtotal, tax_amount, tax_breakdown, tax_snapshot, tax_type, discount_amount, total, variant_selection,
-          modifier_selection, special_instructions, status, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?)
+          modifier_selection, special_instructions,
+          unit_of_measure, quantity_source, amount_source, scan_raw, original_unit_price,
+          status, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?)
       `);
 
       for (const item of items) {
@@ -423,41 +598,30 @@ router.post('/', requireRole('owner', 'manager', 'cashier', 'waiter'), (req: Req
           throw new Error(`Product ${item.product_id} not found`);
         }
 
-        if (product.track_inventory && product.stock_quantity < item.quantity) {
-          throw new Error(`Insufficient stock for ${product.name}`);
-        }
-
-        const unitPrice = parseFloat(product.price);
-        const quantity = item.quantity;
+        const { unitPrice, originalUnitPrice, overridden: priceOverridden } = resolveUnitPrice(db, product, item);
         // item.discount_amount is intentionally ignored here — discounts are only
         // applied through the dedicated PATCH discount endpoints, which enforce
         // discount_mode/max_percentage/max_amount/approval (vuln-0002).
         const itemDiscount = 0;
 
-        // Validate quantity and price
-        if (!quantity || quantity <= 0 || !Number.isFinite(quantity)) {
-          throw new Error(`Invalid quantity for ${product.name}: must be a positive number`);
-        }
         if (unitPrice < 0 || !Number.isFinite(unitPrice)) {
           throw new Error(`Invalid price for ${product.name}: must be a non-negative number`);
         }
 
-        let itemSubtotal = unitPrice * quantity;
-        if (item.addons && Array.isArray(item.addons)) {
-          for (const addon of item.addons) {
-            if (!addon) continue;
-            if (addon.quantity !== undefined) {
-              if (typeof addon.quantity !== 'number' || !Number.isInteger(addon.quantity) || addon.quantity <= 0) {
-                throw new Error(`Invalid add-on quantity for ${addon.name || 'addon'}: must be a positive integer`);
-              }
-            }
-            const addonQty = addon.quantity || 1;
-            itemSubtotal += (addon.price || 0) * addonQty * quantity;
-          }
-        }
-        itemSubtotal = Math.max(0, itemSubtotal - itemDiscount);
+        // Resolved BEFORE the stock check: with a scale label the client's
+        // quantity is discarded, so checking stock against it would test the
+        // wrong number.
+        const measurement = resolveLineMeasurement(db, product, item);
+        const quantity = measurement.quantity;
 
-        const taxResult = calculateItemTax(tenantInfo, product, itemSubtotal, customer);
+        if (product.track_inventory && product.stock_quantity < quantity) {
+          throw new Error(`Insufficient stock for ${product.name}`);
+        }
+
+        const itemSubtotal = computeLineSubtotal(measurement, unitPrice, item.addons, itemDiscount);
+
+        const taxResult = calculateItemTax(tenantInfo, product,
+          { taxableAmount: itemSubtotal, quantity, unitPrice }, customer);
 
         totalTax += taxResult.tax_amount;
         if (taxResult.tax_type !== 'inclusive') {
@@ -469,8 +633,8 @@ router.post('/', requireRole('owner', 'manager', 'cashier', 'waiter'), (req: Req
         const itemTaxSnapshotJson = taxResult.tax_snapshot ? JSON.stringify(taxResult.tax_snapshot) : null;
         allTaxSnapshots.push(itemTaxSnapshotJson);
 
-        const itemTotal = itemSubtotal + (taxResult.tax_type === 'inclusive' ? 0 : taxResult.tax_amount);
-        subtotal += itemSubtotal;
+        const itemTotal = roundMoney(itemSubtotal + (taxResult.tax_type === 'inclusive' ? 0 : taxResult.tax_amount));
+        subtotal = roundMoney(subtotal + itemSubtotal);
 
         const itemCreatedAt = now();
         const insertItemResult = insertItem.run(
@@ -479,7 +643,11 @@ router.post('/', requireRole('owner', 'manager', 'cashier', 'waiter'), (req: Req
           taxResult.tax_type, itemDiscount, itemTotal,
           JSON.stringify(item.variant_selection || null),
           JSON.stringify(item.modifier_selection || null),
-          item.special_instructions || null, itemCreatedAt, itemCreatedAt
+          item.special_instructions || null,
+          measurement.unitOfMeasure, measurement.quantitySource,
+          priceOverridden ? 'manual_price' : measurement.amountSource,
+          measurement.scanRaw, originalUnitPrice,
+          itemCreatedAt, itemCreatedAt
         );
         insertOrderItemAddons(db, insertItemResult.lastInsertRowid, item.addons, itemCreatedAt);
 
@@ -629,8 +797,10 @@ router.post('/:id/items', requireRole('owner', 'manager', 'cashier', 'waiter'), 
       const insertItem = db.prepare(`
         INSERT INTO order_items (order_id, product_id, product_name, product_sku, unit_price, quantity,
           subtotal, tax_amount, tax_breakdown, tax_snapshot, tax_type, discount_amount, total, variant_selection,
-          modifier_selection, special_instructions, status, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?)
+          modifier_selection, special_instructions,
+          unit_of_measure, quantity_source, amount_source, scan_raw, original_unit_price,
+          status, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?)
       `);
 
       for (const item of items) {
@@ -638,42 +808,30 @@ router.post('/:id/items', requireRole('owner', 'manager', 'cashier', 'waiter'), 
         if (!product) {
           throw new Error(`Product ${item.product_id} not found`);
         }
-        if (product.track_inventory && product.stock_quantity < item.quantity) {
-          throw new Error(`Insufficient stock for ${product.name}`);
-        }
-
-        const unitPrice = parseFloat(product.price);
-        const quantity = item.quantity;
+        const { unitPrice, originalUnitPrice, overridden: priceOverridden } = resolveUnitPrice(db, product, item);
         // item.discount_amount is intentionally ignored here — discounts are only
         // applied through the dedicated PATCH discount endpoints, which enforce
         // discount_mode/max_percentage/max_amount/approval (vuln-0002).
         const itemDiscount = 0;
 
-        // Validate quantity and price
-        if (!quantity || quantity <= 0 || !Number.isFinite(quantity)) {
-          throw new Error(`Invalid quantity for ${product.name}: must be a positive number`);
-        }
         if (unitPrice < 0 || !Number.isFinite(unitPrice)) {
           throw new Error(`Invalid price for ${product.name}: must be a non-negative number`);
         }
 
-        let itemSubtotal = unitPrice * quantity;
-        if (item.addons && Array.isArray(item.addons)) {
-          for (const addon of item.addons) {
-            if (!addon) continue;
-            if (addon.quantity !== undefined) {
-              if (typeof addon.quantity !== 'number' || !Number.isInteger(addon.quantity) || addon.quantity <= 0) {
-                throw new Error(`Invalid add-on quantity for ${addon.name || 'addon'}: must be a positive integer`);
-              }
-            }
-            const addonQty = addon.quantity || 1;
-            itemSubtotal += (addon.price || 0) * addonQty * quantity;
-          }
-        }
-        itemSubtotal = Math.max(0, itemSubtotal - itemDiscount);
+        // Same order as the creation path: resolve first, then check stock
+        // against the quantity the server actually decided on.
+        const measurement = resolveLineMeasurement(db, product, item);
+        const quantity = measurement.quantity;
 
-        const taxResult = calculateItemTax(tenantInfo, product, itemSubtotal, customer);
-        const itemTotal = itemSubtotal + (taxResult.tax_type === 'inclusive' ? 0 : taxResult.tax_amount);
+        if (product.track_inventory && product.stock_quantity < quantity) {
+          throw new Error(`Insufficient stock for ${product.name}`);
+        }
+
+        const itemSubtotal = computeLineSubtotal(measurement, unitPrice, item.addons, itemDiscount);
+
+        const taxResult = calculateItemTax(tenantInfo, product,
+          { taxableAmount: itemSubtotal, quantity, unitPrice }, customer);
+        const itemTotal = roundMoney(itemSubtotal + (taxResult.tax_type === 'inclusive' ? 0 : taxResult.tax_amount));
         const itemTaxSnapshotJson = taxResult.tax_snapshot ? JSON.stringify(taxResult.tax_snapshot) : null;
 
         const itemCreatedAt = now();
@@ -683,7 +841,11 @@ router.post('/:id/items', requireRole('owner', 'manager', 'cashier', 'waiter'), 
           taxResult.tax_type, itemDiscount, itemTotal,
           JSON.stringify(item.variant_selection || null),
           JSON.stringify(item.modifier_selection || null),
-          item.special_instructions || null, itemCreatedAt, itemCreatedAt
+          item.special_instructions || null,
+          measurement.unitOfMeasure, measurement.quantitySource,
+          priceOverridden ? 'manual_price' : measurement.amountSource,
+          measurement.scanRaw, originalUnitPrice,
+          itemCreatedAt, itemCreatedAt
         );
         insertOrderItemAddons(db, insertItemResult.lastInsertRowid, item.addons, itemCreatedAt);
 
@@ -1010,6 +1172,13 @@ router.patch('/:id/convert-to-takeaway', requireRole('owner', 'manager', 'cashie
 
 router.patch('/:id/discount', requireRole('owner', 'manager'), (req: Request, res: Response) => {
   try {
+    // Hiding the button is not removing the capability: a stale client, a
+    // replayed request or a second till still reaches this endpoint. The
+    // setting is enforced here, where the money actually changes.
+    if (getSettingValue('discount_enabled') === 'false') {
+      return res.status(400).json({ error: 'Discounts are disabled for this shop' });
+    }
+
     const db = getDatabase();
     const order = db.prepare('SELECT * FROM orders WHERE id = ?').get(req.params.id) as any;
     if (!order) {
@@ -1208,6 +1377,13 @@ router.patch('/:id/discount', requireRole('owner', 'manager'), (req: Request, re
 
 router.patch('/:id/items/:itemId/discount', requireRole('owner', 'manager'), (req: Request, res: Response) => {
   try {
+    // Hiding the button is not removing the capability: a stale client, a
+    // replayed request or a second till still reaches this endpoint. The
+    // setting is enforced here, where the money actually changes.
+    if (getSettingValue('discount_enabled') === 'false') {
+      return res.status(400).json({ error: 'Discounts are disabled for this shop' });
+    }
+
     const db = getDatabase();
     const order = db.prepare('SELECT * FROM orders WHERE id = ?').get(req.params.id) as any;
     if (!order) {
@@ -1280,8 +1456,19 @@ router.patch('/:id/items/:itemId/discount', requireRole('owner', 'manager'), (re
 
     // Calculate item discount amount (include addon prices)
     const addonRows = db.prepare('SELECT price, quantity FROM order_item_addons WHERE order_item_id = ?').all(item.id) as { price: number; quantity?: number }[];
-    const addonTotal = addonRows.reduce((sum, addon) => sum + (addon.price || 0) * (addon.quantity || 1) * item.quantity, 0);
-    const itemBaseTotal = item.unit_price * item.quantity + addonTotal;
+    // Mirrors computeLineSubtotal: an add-on is countable, so it is not scaled
+    // by a weight. Without this, discounting a weighed line would recompute a
+    // different base than the one the line was created with.
+    const weighedLine = isWeighed(item.unit_of_measure);
+    const addonTotal = addonRows.reduce(
+      (sum, addon) => sum + (addon.price || 0) * (addon.quantity || 1) * (weighedLine ? 1 : item.quantity), 0);
+    const itemBaseTotal = item.amount_source === 'label_price'
+      // The label's amount is authoritative and cannot be re-derived from
+      // unit_price x quantity — that quantity was itself derived from the
+      // amount, so the round trip does not close. Undo any prior discount
+      // instead; subtotal already includes the add-ons.
+      ? roundMoney(Number(item.subtotal) + Number(item.discount_amount || 0))
+      : roundMoney(item.unit_price * item.quantity + addonTotal);
 
     let discountAmount: number;
     if (discount_type === 'percentage') {
@@ -1289,10 +1476,10 @@ router.patch('/:id/items/:itemId/discount', requireRole('owner', 'manager'), (re
     } else {
       discountAmount = Math.min(discount_value, itemBaseTotal);
     }
-    discountAmount = Math.round(discountAmount * 100) / 100;
+    discountAmount = roundMoney(discountAmount);
 
     // Recalculate item subtotal after discount
-    const newSubtotal = Math.max(0, itemBaseTotal - discountAmount);
+    const newSubtotal = roundMoney(Math.max(0, itemBaseTotal - discountAmount));
 
     // Recalculate tax on discounted subtotal
     const product = db.prepare('SELECT * FROM products WHERE id = ?').get(item.product_id) as any;
@@ -1305,12 +1492,15 @@ router.patch('/:id/items/:itemId/discount', requireRole('owner', 'manager'), (re
       state_code: settingsMap.state_code || '',
       taxes_enabled: settingsMap.taxes_enabled === 'true',
     };
-    const taxResult = calculateItemTax(tenantInfo, product, newSubtotal, customer);
+    const taxResult = calculateItemTax(tenantInfo, product,
+      // The discounted amount is what gets taxed; quantity and unit price ride
+      // along so a per-kilo rule still sees the weight.
+      { taxableAmount: newSubtotal, quantity: item.quantity, unitPrice: item.unit_price }, customer);
     const newTaxAmount = taxResult.tax_amount;
     const newTaxBreakdown = taxResult.tax_breakdown;
     const newTaxSnapshotJson = taxResult.tax_snapshot ? JSON.stringify(taxResult.tax_snapshot) : null;
 
-    const newTotal = newSubtotal + (taxResult.tax_type === 'inclusive' ? 0 : newTaxAmount);
+    const newTotal = roundMoney(newSubtotal + (taxResult.tax_type === 'inclusive' ? 0 : newTaxAmount));
 
     const updatedItem = withTxn(() => {
       // Update item with recalculated tax

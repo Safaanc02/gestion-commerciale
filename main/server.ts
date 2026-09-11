@@ -344,9 +344,13 @@ export function stopServer(): void {
 }
 
 /** Helper to check if an IPv4 address is active and valid (excludes loopback & 169.254.x.x link-local APIPA). */
-function isValidLocalIPv4(alias: os.NetworkInterfaceInfo): boolean {
+function isIPv4Alias(alias: os.NetworkInterfaceInfo): boolean {
   const isIPv4 = alias.family === 'IPv4' || (alias.family as string | number) === 4;
-  if (!isIPv4 || alias.internal) return false;
+  return isIPv4 && !alias.internal;
+}
+
+function isValidLocalIPv4(alias: os.NetworkInterfaceInfo): boolean {
+  if (!isIPv4Alias(alias)) return false;
   const ip = alias.address;
   if (ip.startsWith('169.254.') || ip.startsWith('127.') || ip === '0.0.0.0') {
     return false;
@@ -354,33 +358,59 @@ function isValidLocalIPv4(alias: os.NetworkInterfaceInfo): boolean {
   return true;
 }
 
-/** Returns the first valid non-loopback IPv4 address on the machine. */
-export function getLocalIP(): string {
-  const interfaces = os.networkInterfaces();
+/**
+ * A link-local (169.254.x.x) address, self-assigned when no DHCP server
+ * answered.
+ *
+ * Not preferred — it is what a machine falls back to when the network is
+ * half-configured — but it IS the working address when two PCs are wired
+ * straight into a switch with no router handing out addresses. That is a real
+ * shop setup: till and scale station, one cable each, no internet box. Before
+ * this, such an installation reported 127.0.0.1 as its own address, which the
+ * other machine can never reach.
+ */
+function isLinkLocalIPv4(alias: os.NetworkInterfaceInfo): boolean {
+  return isIPv4Alias(alias) && alias.address.startsWith('169.254.');
+}
+
+type InterfaceMap = NodeJS.Dict<os.NetworkInterfaceInfo[]>;
+
+function collectIPv4(
+  interfaces: InterfaceMap,
+  predicate: (alias: os.NetworkInterfaceInfo) => boolean,
+): string[] {
+  const ips: string[] = [];
   for (const name of Object.keys(interfaces)) {
-    const iface = interfaces[name];
-    if (!iface) continue;
-    for (const alias of iface) {
-      if (isValidLocalIPv4(alias)) {
-        return alias.address;
-      }
+    for (const alias of interfaces[name] ?? []) {
+      if (predicate(alias)) ips.push(alias.address);
     }
   }
-  return '127.0.0.1';
+  return ips;
+}
+
+/**
+ * Addresses this machine can be reached on, best first.
+ *
+ * Pure, and exported, so the two network shapes a shop actually presents —
+ * a switch wired to the internet box, and a switch wired to nothing — can be
+ * tested without a network.
+ */
+export function pickLanAddresses(interfaces: InterfaceMap): string[] {
+  const routed = collectIPv4(interfaces, isValidLocalIPv4);
+  if (routed.length > 0) return routed;
+  const linkLocal = collectIPv4(interfaces, isLinkLocalIPv4);
+  return linkLocal.length > 0 ? linkLocal : ['127.0.0.1'];
+}
+
+/** Returns the first valid non-loopback IPv4 address on the machine. */
+export function getLocalIP(): string {
+  // A routed address first; a link-local one only when that is genuinely all
+  // this machine has. Returning 127.0.0.1 there would tell the scale station
+  // to connect to itself.
+  return pickLanAddresses(os.networkInterfaces())[0];
 }
 
 /** Returns all valid non-loopback IPv4 addresses on the machine. */
 export function getAllLocalIPs(): string[] {
-  const ips: string[] = [];
-  const interfaces = os.networkInterfaces();
-  for (const name of Object.keys(interfaces)) {
-    const iface = interfaces[name];
-    if (!iface) continue;
-    for (const alias of iface) {
-      if (isValidLocalIPv4(alias)) {
-        ips.push(alias.address);
-      }
-    }
-  }
-  return ips.length > 0 ? ips : ['127.0.0.1'];
+  return pickLanAddresses(os.networkInterfaces());
 }

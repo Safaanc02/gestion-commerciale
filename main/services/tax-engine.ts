@@ -20,6 +20,20 @@ export interface TaxEngineLine {
   kind: TaxLineKind;
   quantity: string;
   unitPrice: string;
+  /**
+   * Taxable base for the line, when the caller already holds an authoritative
+   * one and it must not be re-derived.
+   *
+   * Weighed goods need this: the persisted line amount is rounded to the
+   * currency (0.734 kg x 12.50 = 9.18, not 9.175), and a price-embedded scale
+   * label carries an amount whose quantity was derived FROM it, so
+   * unitPrice x quantity would not reproduce it. Passing the real quantity
+   * alongside keeps per-unit rules and per-unit rounding meaningful without
+   * letting the base drift by a centime.
+   *
+   * Omit it and the engine multiplies as before.
+   */
+  grossAmount?: string;
   discount?: string;
   taxBehavior?: TaxBehavior;
   transactionCategoryId?: string;
@@ -241,7 +255,10 @@ function calculateRawLine(input: TaxEngineInput, line: TaxEngineLine): RawLine {
   if (quantity.lte(0)) throw new Error(`Line ${line.lineId} quantity must be greater than zero`);
   if (unitPrice.lt(0) || discount.lt(0)) throw new Error(`Line ${line.lineId} has a negative amount`);
 
-  const grossAmount = unitPrice.mul(quantity);
+  const grossAmount = line.grossAmount !== undefined && line.grossAmount !== null
+    ? decimal(line.grossAmount)
+    : unitPrice.mul(quantity);
+  if (grossAmount.lt(0)) throw new Error(`Line ${line.lineId} has a negative gross amount`);
   if (discount.gt(grossAmount)) {
     console.warn(`[TaxEngine] Line ${line.lineId} discount (${discount}) exceeds gross amount (${grossAmount}), clamping gross to 0.`);
   }

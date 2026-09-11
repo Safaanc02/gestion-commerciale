@@ -17,6 +17,8 @@ import { reportRoutes } from './reports';
 import { kdsRoutes } from './kds';
 import { kdsInfoRoutes } from './kds-info';
 import { posInfoRoutes } from './pos-info';
+import { posScanRoutes } from './pos-scan';
+import { scaleStationRoutes } from './scale-station';
 import { moreAppsRoutes } from './more-apps';
 import { notifyKdsUpdate } from '../services/kds';
 import { printerRoutes } from './printers';
@@ -84,6 +86,8 @@ export function registerRoutes(app: Express): void {
   app.use('/api/kds', kdsRoutes);
   app.use('/api/kds-info', kdsInfoRoutes);
   app.use('/api/pos-info', posInfoRoutes);
+  app.use('/api/pos', posScanRoutes);
+  app.use('/api/scale-station', scaleStationRoutes);
   app.use('/api/more-apps', moreAppsRoutes);
   app.use('/api/printers', printerRoutes);
   app.use('/api/db', databaseRoutes);
@@ -326,14 +330,19 @@ export function registerRoutes(app: Express): void {
             INSERT INTO order_items (
               order_id, product_id, product_name, product_sku, unit_price, quantity,
               subtotal, tax_amount, tax_breakdown, tax_snapshot, tax_type, discount_amount, total,
-              variant_selection, modifier_selection, status, created_at, updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'void_adjustment', ?, ?)
+              variant_selection, modifier_selection, unit_of_measure, status, created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'void_adjustment', ?, ?)
           `).run(
             orderId, item.product_id, `Void: ${item.product_name}`, item.product_sku,
             -item.unit_price, item.quantity, -item.subtotal, -(item.tax_amount || 0),
             invertTaxBreakdown(item.tax_breakdown), invertTaxSnapshot(item.tax_snapshot), item.tax_type,
             -(item.discount_amount || 0), -item.total,
-            item.variant_selection, item.modifier_selection, now(), now(),
+            item.variant_selection, item.modifier_selection,
+            // The mirror line must carry the SAME unit as the line it reverses.
+            // Defaulting it to 'unit' would book +0.734 in kg against -0.734 in
+            // unit, and per-unit aggregates would never cancel out.
+            item.unit_of_measure || 'unit',
+            now(), now(),
           );
           // #150 Q1-Q4 decision: mark 'voided', not 'cancelled' — a distinct,
           // terminal status. Item stage-change endpoints (routes/kds.ts,
