@@ -214,6 +214,31 @@ function seedManagerUser(db: any): { userId: string; token: string; authHeader: 
   return { userId, token, authHeader: { Authorization: `Bearer ${token}` } };
 }
 
+/**
+ * A till user with no catalogue rights.
+ *
+ * Needed to prove the negative half of a permission: that the endpoint refuses
+ * the role it is supposed to refuse, not merely that it accepts the owner.
+ */
+function seedCashierUser(db: any): { userId: string; token: string; authHeader: Record<string, string> } {
+  const { getJWTSecret } = require('../../main/routes/auth');
+  const userId = 'cashier-test-001';
+  const passwordHash = bcrypt.hashSync('testpass123', 10);
+
+  db.prepare(
+    `INSERT OR IGNORE INTO users (id, name, email, password, role, is_active, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+  ).run(userId, 'Test Cashier', 'cashier@test.local', passwordHash, 'cashier', 1, now(), now());
+
+  const token = jwt.sign(
+    { userId, email: 'cashier@test.local', role: 'cashier' },
+    getJWTSecret(),
+    { expiresIn: '1h' }
+  );
+
+  return { userId, token, authHeader: { Authorization: `Bearer ${token}` } };
+}
+
 function seedCategory(db: any, id: string, name: string) {
   db.prepare(
     `INSERT OR IGNORE INTO categories (id, name, sort_order, is_active, created_at, updated_at)
@@ -276,6 +301,7 @@ function seedWalletCredit(db: any, customerId: string, amount: number, billId?: 
 function installAndActivateTestTaxPack(db: any, pack: any) {
   const installedAt = now();
   const versionId = `${pack.id}@${pack.version}`;
+
   const packJson = JSON.stringify(pack);
   const digest = crypto.createHash('sha256').update(packJson).digest('hex');
 
@@ -420,6 +446,7 @@ module.exports = {
   // Seed data
   seedOwnerUser,
   seedManagerUser,
+  seedCashierUser,
   seedCategory,
   seedProduct,
   seedCustomer,
