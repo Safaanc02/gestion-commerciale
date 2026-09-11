@@ -925,14 +925,14 @@ export default function OrdersPage() {
                     {(() => { const badge = orderStatusBadge[order.status]; return badge ? (
                       <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${badge.bg} ${badge.text}`}>{t(badge.labelKey)}</span>
                     ) : null; })()}
-                    {/* Restaurants only. "Dine in", "takeaway" and "delivery"
-                        are a restaurant's three ways of serving; a grocery has
-                        one, so the label sat on every row of the history saying
-                        nothing — and "consommation sur place" against a bag of
-                        flour reads as a mistake rather than as a category. */}
-                    {isRestaurant && (
-                      <span className="text-sm text-muted-foreground capitalize">{t(orderTypeLabel[order.type] ?? order.type)}</span>
-                    )}
+                    {/* A restaurant's three ways of serving — dine in, takeaway,
+                        delivery — mean nothing in a grocery, where every sale is
+                        the same transaction over a counter. Rather than show a
+                        category nobody chose, a retail sale says what it is; the
+                        old rows recorded as "dine in" read correctly too. */}
+                    <span className="text-sm text-muted-foreground capitalize">
+                      {isRestaurant ? t(orderTypeLabel[order.type] ?? order.type) : t('orders.counterSale')}
+                    </span>
                     {order.table && (
                       <span className="text-sm text-orange-600 font-medium">{order.table.name}</span>
                     )}

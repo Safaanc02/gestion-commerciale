@@ -270,6 +270,7 @@
   "nav.uptimeLabel": "Up: ",
   "nav.user": "User",
   "nav.whatsapp": "WhatsApp",
+  "orders.counterSale": "Counter sale",
   "orders.journalRangeInvalid": "The start date is after the end date",
   "orders.journalEmpty": "No sales in this period",
   "orders.journalHint": "An A4 sheet through the ordinary printer, one line per sale.",

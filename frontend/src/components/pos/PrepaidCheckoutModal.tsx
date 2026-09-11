@@ -264,14 +264,13 @@ export default function PrepaidCheckoutModal({ currency, onClose, onConfirm }: P
         <div className="flex items-center justify-between px-5 pt-5 pb-4 border-b border-border">
           <div>
             <h2 className="text-lg font-bold text-foreground">{t('pos.checkout')}</h2>
-            {/* Restaurants only. A grocery sells one way, so this line said
-                "external order" under the heading on every single sale — a
-                category nobody chose and nobody can act on. */}
-            {isRestaurant && (
-              <p className="text-xs text-muted-foreground/70 mt-0.5 capitalize">
-                {t(`pos.orderTypeSuffix_${cart.orderType}` as 'pos.orderTypeSuffix_dine_in' | 'pos.orderTypeSuffix_takeaway' | 'pos.orderTypeSuffix_delivery' | 'pos.orderTypeSuffix_online')}
-              </p>
-            )}
+            {/* A grocery sells one way, so naming the restaurant's mode of
+                service here said nothing. It says what the sale is instead. */}
+            <p className="text-xs text-muted-foreground/70 mt-0.5 capitalize">
+              {isRestaurant
+                ? t(`pos.orderTypeSuffix_${cart.orderType}` as 'pos.orderTypeSuffix_dine_in' | 'pos.orderTypeSuffix_takeaway' | 'pos.orderTypeSuffix_delivery' | 'pos.orderTypeSuffix_online')
+                : t('orders.counterSale')}
+            </p>
           </div>
           <button
             onClick={onClose}

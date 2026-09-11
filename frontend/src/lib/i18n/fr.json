@@ -270,6 +270,7 @@
   "nav.uptimeLabel": "Actif depuis : ",
   "nav.user": "Utilisateur",
   "nav.whatsapp": "WhatsApp",
+  "orders.counterSale": "Vente au comptoir",
   "orders.journalRangeInvalid": "La date de début est après celle de fin",
   "orders.journalEmpty": "Aucune vente sur cette période",
   "orders.journalHint": "Feuille A4 par l’imprimante normale, une ligne par vente.",

@@ -270,6 +270,7 @@
   "nav.uptimeLabel": "Ativo: ",
   "nav.user": "Usuário",
   "nav.whatsapp": "WhatsApp",
+  "orders.counterSale": "Venda ao balcão",
   "orders.journalRangeInvalid": "A data inicial é posterior à final",
   "orders.journalEmpty": "Sem vendas neste período",
   "orders.journalHint": "Folha A4 pela impressora normal, uma linha por venda.",

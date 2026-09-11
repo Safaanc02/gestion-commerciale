@@ -270,6 +270,7 @@
   "nav.uptimeLabel": "مدة التشغيل: ",
   "nav.user": "المستخدم",
   "nav.whatsapp": "WhatsApp",
+  "orders.counterSale": "بيع بالمحل",
   "orders.journalRangeInvalid": "تاريخ البداية بعد تاريخ النهاية",
   "orders.journalEmpty": "لا توجد مبيعات في هذه الفترة",
   "orders.journalHint": "ورقة A4 عبر الطابعة العادية، سطر واحد لكل عملية بيع.",
