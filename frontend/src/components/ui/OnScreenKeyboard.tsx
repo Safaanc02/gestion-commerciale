@@ -90,6 +90,19 @@ export default function OnScreenKeyboard() {
       if (el?.closest('[data-osk]')) return;   // a key: keep the field
       if (isTextField(el)) {
         target.current = el;
+        // Keep Windows' own touch keyboard down.
+        //
+        // On a terminal with no keyboard attached, Windows raises its keyboard
+        // by itself as soon as a field takes focus — so the cashier would get
+        // two, stacked, one of them without an Arabic layout. inputmode="none"
+        // is how a page says it handles text entry itself, and Chromium
+        // suppresses the system keyboard for it. Set here rather than on every
+        // field because it must only apply while ours is switched on: turn the
+        // setting off and the fields go back to asking the OS.
+        //
+        // pointerdown runs before focus, which is what makes this early enough
+        // to matter.
+        el.inputMode = 'none';
         setOpen(true);
         return;
       }
@@ -123,6 +136,21 @@ export default function OnScreenKeyboard() {
     writeValue(el, el.value.slice(0, start) + text + el.value.slice(end), start + text.length);
     if (shift) setShift(false);
   }, [shift]);
+
+  // Hand the field back to the OS when the setting is switched off, or it
+  // stays mute until the page is reloaded. Touching the DOM node is what an
+  // effect is for; closing is state, and is adjusted during render below.
+  useEffect(() => {
+    if (!enabled && target.current) target.current.inputMode = '';
+  }, [enabled]);
+
+  // Turning the setting off and on again should not leave the keyboard raised
+  // over a field nobody tapped.
+  const [syncedEnabled, setSyncedEnabled] = useState(enabled);
+  if (syncedEnabled !== enabled) {
+    setSyncedEnabled(enabled);
+    setOpen(false);
+  }
 
   if (!enabled || !open) return null;
 
