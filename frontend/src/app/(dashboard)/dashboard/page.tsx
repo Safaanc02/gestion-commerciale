@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useAuthStore } from '@/store/auth';
 import api from '@/lib/api';
-import { Banknote, Receipt, PackageSearch, TrendingUp, ClipboardList, ArrowRight, Trophy, Tags, BarChart3, Wallet } from 'lucide-react';
+import { TrendingUp, ClipboardList, ArrowRight, Tags, BarChart3, Wallet } from 'lucide-react';
 import { useI18n } from '@/hooks/useI18n';
 import toast from 'react-hot-toast';
 import { useFormatCurrency } from '@/hooks/useFormatCurrency';
@@ -217,54 +217,7 @@ export default function DashboardPage() {
     return `${parts.join(' · ')} — ${localizeTemplate(t('dashboard.inOrders'), { orders })}`;
   };
 
-  const dateScopedTiles = isToday
-    ? [
-        {
-          label: t('dashboard.ticketsToday'),
-          value: stats?.ticketsToday ?? 0,
-          icon: Receipt,
-          href: '/orders',
-        },
-        {
-          label: t('dashboard.lowStock'),
-          value: stats?.lowStockCount ?? 0,
-          icon: PackageSearch,
-          href: '/products',
-        },
-      ]
-    : [
-        {
-          label: t('dashboard.orders'),
-          value: daySummary?.orders.count ?? 0,
-          icon: Receipt,
-          href: '/orders',
-        },
-        {
-          label: t('dashboard.newCustomers'),
-          value: daySummary?.customers.new ?? 0,
-          icon: Trophy,
-          href: '/customers',
-        },
-      ];
 
-  const tiles = [
-    {
-      label: isToday ? t('dashboard.todaySales') : t('dashboard.sales'),
-      value: fmt(isToday ? (stats?.sales ?? 0) : (daySummary?.bills.collected ?? 0)),
-      icon: Banknote,
-      href: '/orders',
-    },
-    ...dateScopedTiles,
-    {
-      label: t('dashboard.aov'),
-      value: fmt(insights?.aov ?? 0),
-      icon: TrendingUp,
-      href: '/orders',
-    },
-    // "Average preparation time" measured how long a kitchen took between
-    // order and ready. A grocery prepares nothing, so the tile was always
-    // showing a dash.
-  ];
 
   return (
     <div className="p-6">
@@ -288,41 +241,6 @@ export default function DashboardPage() {
         </div>
       ) : (
         <>
-          {/* Four across, not three. There are always four figures here, and a
-              three-column grid dropped the fourth onto a row of its own,
-              stranded under the first. */}
-          {/* One band, four cells, hairlines between them — not four floating
-              boxes. Boxed cards each drew their own frame and the eye had to
-              cross four borders to compare four numbers that belong together.
-              The first cell is the day's takings and carries the only colour
-              and the largest type; the rest are context for it. */}
-          <div className="mb-8 grid grid-cols-2 divide-y divide-border overflow-hidden rounded-lg border border-border lg:grid-cols-4 lg:divide-y-0 lg:divide-x">
-            {tiles.map((tile, index) => (
-              <Link
-                key={tile.label}
-                href={tile.href}
-                className="group flex flex-col gap-3 p-5 transition-colors hover:bg-muted/50"
-              >
-                <div className="flex items-center gap-2">
-                  <tile.icon
-                    size={16}
-                    strokeWidth={1.75}
-                    className={`shrink-0 ${index === 0 ? 'text-brand' : 'text-muted-foreground'}`}
-                  />
-                  <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                    {tile.label}
-                  </span>
-                </div>
-                <p
-                  className={`font-bold tabular-nums leading-none ${
-                    index === 0 ? 'text-3xl text-brand' : 'text-2xl text-foreground'
-                  }`}
-                >
-                  {tile.value}
-                </p>
-              </Link>
-            ))}
-          </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             {/* Recent Orders */}

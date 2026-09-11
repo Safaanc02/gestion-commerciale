@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 import api from '@/lib/api';
 import { useAuthStore } from '@/store/auth';
 import CashJournalDialog from '@/components/orders/CashJournalDialog';
+import DailyFigures from '@/components/reports/DailyFigures';
 import { quantityLabel } from '@/lib/cart-math';
 import { Button } from '@/components/ui/button';
 import { CreditCard, Trash2, RotateCcw, Clock, MessageCircle, Printer, XCircle, Lock, Percent, Banknote, Search, Plus, ChevronDown, ChevronRight, UserPlus, User, ShoppingBag, Send, Loader2, Ban, StickyNote, X, FileText } from 'lucide-react';
@@ -749,6 +750,9 @@ export default function OrdersPage() {
 
   return (
     <div className="flex flex-col h-[calc(100vh-4rem)]">
+      {/* Today's takings, above the sales they summarise. */}
+      <DailyFigures />
+
       {/* Header */}
       <div className="flex items-center justify-between mb-4">
         <h1 className="text-2xl font-bold text-foreground">{t('nav.orders')}</h1>
