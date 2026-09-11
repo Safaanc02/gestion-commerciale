@@ -4,6 +4,7 @@ import * as os from 'os';
 import * as path from 'path';
 import { execSync, exec, execFile, execFileSync } from 'child_process';
 import { promisify } from 'util';
+import { formatQuantity, isWeighed } from '../lib/units';
 import { getDatabase, parseDbTimestamp } from '../db';
 import { PrinterCutMode, resolvePrinterProfile, matchSupportedPrinterProfile, SupportedPrinterProfile } from './profiles';
 import { getCountryByCode } from '../countries';
@@ -12,6 +13,7 @@ import { correlationId, type FloErrorCode } from '../errors';
 import { sendEvent } from '../services/telemetry';
 import { cloudSync } from '../services/cloud-sync';
 import { randomUUID } from 'crypto';
+import { hasArabic, renderLine as renderArabicLine } from './arabic';
 
 export type PrintResult = {
   ok: boolean;
@@ -571,6 +573,30 @@ export async function printReceipt(order: any, bill: any, business?: any, templa
   }
 }
 
+/**
+ * Send a pre-built scale label to the label printer.
+ *
+ * Prefers a printer explicitly named "label"/"etiquette" so a station with two
+ * printers (receipts and stickers) sends each to the right one; falls back to
+ * the default printer when there is only one.
+ */
+export async function printScaleLabel(data: Buffer): Promise<DispatchResult> {
+  try {
+    const db = getDatabase();
+    const labelPrinter = db.prepare(`
+      SELECT * FROM printers
+      WHERE lower(name) LIKE '%label%' OR lower(name) LIKE '%etiquette%' OR lower(name) LIKE '%étiquette%'
+      ORDER BY is_default DESC LIMIT 1
+    `).get() as any;
+    const printer = labelPrinter || getPrinterConfig();
+    if (!printer) return { ok: false, detail: 'No printer configured' };
+    return await dispatchPrint(printer, data);
+  } catch (error: any) {
+    console.error('[Printer] Scale label print error:', error);
+    return { ok: false, detail: error?.message };
+  }
+}
+
 export async function printKOT(order: any, items: any[], stationName: string, useUnicode: boolean = false, targetPrinter?: any): Promise<DispatchResult> {
   try {
     console.log('[Printer] printKOT called, items count:', items?.length || 0, 'useUnicode:', useUnicode, 'station:', stationName);
@@ -717,6 +743,45 @@ function getColumnsForPrinter(printer: any, profile: SupportedPrinterProfile): n
   return profile.fontAColumns || 48;
 }
 
+/**
+ * Print the same Arabic words under every code-page setting at once.
+ *
+ * Which Arabic mode a thermal printer wants is not something software can ask
+ * it. The manufacturer's table number varies, and whether the printer shapes
+ * letters itself or expects them pre-shaped varies with it. So the shop prints
+ * this page, looks at the paper, and reads back the label of the line that
+ * came out right — one minute at the counter instead of a guess per attempt.
+ */
+export async function printArabicTestPage(): Promise<DispatchResult> {
+  const printer = getPrinterConfig();
+  if (!printer) return { ok: false, detail: 'No printer configured' };
+
+  // Two real product names off the shop's shelves, not a specimen string:
+  // between them they use a lam-alef ligature, letters that join on both
+  // sides, letters that join only backwards, and a number.
+  const SAMPLES = ['شاي الرابوز 200غ', 'جيل دوش خزامة 450مل'];
+  const CANDIDATES: { label: string; arabic: ArabicPrinting }[] = [
+    { label: 'A  cp864 / 22', arabic: { codepage: 'cp864', charsetId: 22 } },
+    { label: 'B  cp864 / 37', arabic: { codepage: 'cp864', charsetId: 37 } },
+    { label: 'C  cp1256 / 50', arabic: { codepage: 'cp1256', charsetId: 50 } },
+    { label: 'D  cp1256 / 22', arabic: { codepage: 'cp1256', charsetId: 22 } },
+    { label: 'E  cp1256 / 32', arabic: { codepage: 'cp1256', charsetId: 32 } },
+  ];
+
+  const parts: Buffer[] = [
+    buildEscPos(['{INIT}', '{CENTER}{BOLD}TEST ARABE{/BOLD}{/CENTER}',
+      'Quelle ligne est lisible ?', ''], false, { arabic: null }),
+  ];
+  for (const c of CANDIDATES) {
+    parts.push(buildEscPos([c.label], false, { arabic: null }));
+    parts.push(buildEscPos(SAMPLES, false, { arabic: c.arabic }));
+    parts.push(buildEscPos([''], false, { arabic: null }));
+  }
+  parts.push(buildEscPos(['{FEED}', '{CUT}'], false, { arabic: null }));
+
+  return dispatchPrint(printer, Buffer.concat(parts));
+}
+
 async function dispatchPrint(printer: any, data: Buffer): Promise<DispatchResult> {
   switch (printer.connection_type) {
     case 'network':
@@ -802,7 +867,7 @@ function formatCompactReceipt(order: any, bill: any, biz: any, cols: number = 48
 
   if (order.items) {
     for (const item of order.items) {
-      lines.push(itemRow(item, itemNameLen, amtLen, prefix, locale));
+      lines.push(...itemRow(item, itemNameLen, amtLen, prefix, locale, cols));
 
       const addons = parseAddons(item.addons);
       for (const addon of addons) {
@@ -883,7 +948,7 @@ function formatClassicReceipt(order: any, bill: any, biz: any, cols: number = 48
 
   if (order.items) {
     for (const item of order.items) {
-      lines.push(itemRow(item, itemNameLen, amtLen, prefix, locale));
+      lines.push(...itemRow(item, itemNameLen, amtLen, prefix, locale, cols));
 
       const addons = parseAddons(item.addons);
       for (const addon of addons) {
@@ -984,7 +1049,7 @@ function formatDetailedReceipt(order: any, bill: any, biz: any, cols: number = 4
 
   if (order.items) {
     for (const item of order.items) {
-      lines.push(itemRow(item, itemNameLen, 10, prefix, locale));
+      lines.push(...itemRow(item, itemNameLen, 10, prefix, locale, cols));
 
       const addons = parseAddons(item.addons);
       for (const addon of addons) {
@@ -1046,6 +1111,52 @@ function formatDetailedReceipt(order: any, bill: any, biz: any, cols: number = 4
 // Item row layout: [ name (nameLen) ][ qty (4) ][ amount right-aligned (amtLen) ].
 // Tax components belong in the document-level breakdown, not a redundant
 // per-item column derived from deprecated product tax fields.
+/**
+ * Currency signs an ESC/POS printer can be told to render — an existing,
+ * explicit printer option, so they are never folded away.
+ */
+const PRINTABLE_CURRENCY = /[₹₨€£¥₩₺₫₪₽฿₱₴₦₵₡₲]/;
+
+/** Ligatures and punctuation NFD cannot decompose on its own. */
+const NON_DECOMPOSABLE: Record<string, string> = {
+  œ: 'oe', Œ: 'OE', æ: 'ae', Æ: 'AE', ß: 'ss', ø: 'o', Ø: 'O',
+  đ: 'd', Đ: 'D', ł: 'l', Ł: 'L', ı: 'i', '·': '.',
+  '«': '"', '»': '"', '“': '"', '”': '"', '‘': "'", '’': "'",
+  '–': '-', '—': '-', '…': '...', '≈': '~', '×': 'x', ' ': ' ',
+};
+
+/**
+ * Reduce a line to characters a generic ESC/POS printer can actually render.
+ *
+ * Accented Latin text is folded ("Blé" -> "Ble") instead of being discarded,
+ * because a shop selling "Pâtes" and "Blé dur" would otherwise get receipt
+ * lines that are simply missing. Scripts no such printer can shape — Arabic,
+ * CJK, emoji — are dropped character by character and reported through
+ * `lost`, so the shopkeeper learns the product name needs a Latin spelling.
+ */
+export function foldToPrinterAscii(input: string): { text: string; lost: boolean } {
+  let lost = false;
+  let out = '';
+  for (const char of String(input ?? '')) {
+    if (char.charCodeAt(0) < 0x80 || PRINTABLE_CURRENCY.test(char)) {
+      out += char;
+      continue;
+    }
+    const mapped = NON_DECOMPOSABLE[char];
+    if (mapped !== undefined) {
+      out += mapped;
+      continue;
+    }
+    const stripped = char.normalize('NFD').replace(/[̀-ͯ]/g, '');
+    if (stripped && /^[\x00-\x7F]+$/.test(stripped)) {
+      out += stripped;
+      continue;
+    }
+    lost = true;
+  }
+  return { text: out, lost };
+}
+
 function itemHeader(nameLen: number, amtLen: number): string {
   const qtyW = 4;
   return (
@@ -1055,12 +1166,42 @@ function itemHeader(nameLen: number, amtLen: number): string {
   );
 }
 
-function itemRow(item: any, nameLen: number, amtLen: number, prefix: string, locale: string = 'en-US'): string {
+/**
+ * One item as printed — two lines when it was sold by weight.
+ *
+ * The weight deliberately does NOT go in the quantity column: that column is 4
+ * characters and "0.734" is 5, so it would push the row past the paper width
+ * and break the alignment of every line on the ticket. It goes on its own
+ * indented line underneath, which is also where a customer looks to check how
+ * a price was reached:
+ *
+ *   Lentilles vertes                 9,18 MAD
+ *     0,734 kg x 12,50 MAD/kg
+ */
+function itemRow(
+  item: any,
+  nameLen: number,
+  amtLen: number,
+  prefix: string,
+  locale: string = 'en-US',
+  cols: number = nameLen + 4 + amtLen,
+): string[] {
   const qtyW = 4;
   const name = truncate(item.product_name, nameLen).padEnd(nameLen);
-  const qty = String(item.quantity).padEnd(qtyW);
   const amt = rightAlign(formatCurrency(item.total, prefix, locale), amtLen);
-  return name + qty + amt;
+
+  if (!isWeighed(item.unit_of_measure)) {
+    return [name + String(item.quantity).padEnd(qtyW) + amt];
+  }
+
+  const precision = Number.isInteger(item.quantity_precision) ? item.quantity_precision : 3;
+  const weight = formatQuantity(Number(item.quantity), 'kg', locale, precision);
+  // A price-embedded label makes the amount authoritative and the weight a
+  // derived figure, so it is marked approximate rather than presented as if it
+  // had been measured.
+  const approx = item.quantity_source === 'price_derived' ? '~' : '';
+  const detail = `  ${approx}${weight} x ${formatCurrency(Number(item.unit_price), prefix, locale)}/kg`;
+  return [name + ' '.repeat(qtyW) + amt, truncate(detail, cols)];
 }
 
 function addonRow(addon: any, nameLen: number, amtLen: number, cols: number, prefix: string, locale: string = 'en-US'): string {
@@ -1168,8 +1309,39 @@ function resolveCurrencyPrefix(symbol: string, useUnicode: boolean): string {
   return prefix.length >= 2 ? prefix : ' '.repeat(2 - prefix.length) + prefix;
 }
 
-export function buildEscPos(lines: string[], useUnicode: boolean = false, options: { cutMode?: PrinterCutMode } = {}, warnings?: PrintWarning[]): Buffer {
+export interface ArabicPrinting {
+  codepage: 'cp864' | 'cp1256';
+  /** The `ESC t n` value that selects it on this printer. */
+  charsetId: number;
+}
+
+/**
+ * Read the Arabic printing settings, or null when the feature is off.
+ *
+ * Resolved here rather than threaded through formatReceipt and its four
+ * template functions, which would mean six signatures changed to carry one
+ * printer option. Callers can still pass it explicitly, which is what the
+ * tests do.
+ */
+export function resolveArabicPrinting(): ArabicPrinting | null {
+  try {
+    const db = getDatabase();
+    const row = db.prepare(`SELECT value FROM settings WHERE key = 'printer_arabic_codepage'`).get() as { value?: string } | undefined;
+    const codepage = row?.value;
+    if (codepage !== 'cp864' && codepage !== 'cp1256') return null;
+    const idRow = db.prepare(`SELECT value FROM settings WHERE key = 'printer_arabic_charset_id'`).get() as { value?: string } | undefined;
+    const charsetId = Number(idRow?.value);
+    return { codepage, charsetId: Number.isFinite(charsetId) ? charsetId : 22 };
+  } catch {
+    // No database — a formatting unit test, or a print attempted during
+    // maintenance. Falling back to ASCII is the safe direction.
+    return null;
+  }
+}
+
+export function buildEscPos(lines: string[], useUnicode: boolean = false, options: { cutMode?: PrinterCutMode; arabic?: ArabicPrinting | null } = {}, warnings?: PrintWarning[]): Buffer {
   const buf: number[] = [];
+  const arabic = options.arabic !== undefined ? options.arabic : resolveArabicPrinting();
 
   const resetAllStyles = () => {
     buf.push(0x1B, 0x45, 0x00);
@@ -1206,18 +1378,47 @@ export function buildEscPos(lines: string[], useUnicode: boolean = false, option
     // them as a conflicting line; unsupported scripts (Arabic, CJK, emoji,
     // etc.) are different because generic ESC/POS printers cannot shape or
     // render them reliably.
-    const textWithoutSupportedCurrency = printableLine.replace(/[₹₨€£¥₩₺₫₪₽฿₱₴₦₵₡₲]/g, '');
-    if (/[^\x00-\x7F]/.test(textWithoutSupportedCurrency)) {
+    // Latin accents are folded to ASCII rather than costing the line.
+    //
+    // This used to `continue`, dropping the WHOLE line: in a French- or
+    // Spanish-speaking shop every "Blé dur", "Pâtes" and "Café" vanished from
+    // the customer's receipt, silently. Generic ESC/POS printers still cannot
+    // render Arabic, CJK or emoji — those characters are dropped individually
+    // and reported — but "Ble dur" is a readable receipt line and a blank one
+    // never is.
+    // A line the printer can render in Arabic must not go through the ASCII
+    // fold, which is what emptied these names in the first place.
+    const printArabic = !!arabic && hasArabic(printableLine);
+    if (printArabic) {
+      const check = renderArabicLine(printableLine, arabic!.codepage);
+      if (check.dropped.length && warnings) {
+        warnings.push({
+          field: isStoreName ? 'store name' : 'receipt line',
+          text: printableLine.trim(),
+          message: `Characters missing from the ${arabic!.codepage.toUpperCase()} code page were left out: ${[...new Set(check.dropped)].join(' ')}`,
+        });
+      }
+    }
+
+    const folded = printArabic ? { text: printableLine, lost: false } : foldToPrinterAscii(printableLine);
+    if (folded.lost) {
       if (warnings) {
         const text = printableLine.trim();
         warnings.push({
           field: isStoreName ? 'store name' : 'receipt line',
           text,
-          message: `${isStoreName ? 'Store name' : 'Receipt line'} was not printed because it contains unsupported characters: ${text}`,
+          message: `${isStoreName ? 'Store name' : 'Receipt line'} contains characters this printer cannot render; they were left out: ${text}`,
         });
       }
+    }
+    if (!folded.text.trim() && printableLine.trim()) {
+      // Nothing survived — printing an empty line in its place would be worse
+      // than skipping it.
       continue;
     }
+    // Fold the line that actually reaches the buffer. Formatting tokens are
+    // pure ASCII, so folding leaves them untouched.
+    line = printArabic ? line : foldToPrinterAscii(line).text;
 
     let lineBold = line.includes('{BOLD}');
     let lineDH = line.includes('{DOUBLE_HEIGHT}');
@@ -1246,7 +1447,16 @@ export function buildEscPos(lines: string[], useUnicode: boolean = false, option
       buf.push(0x1B, 0x45, 0x01);
     }
 
-    buf.push(...Buffer.from(line, 'utf8'));
+    if (printArabic) {
+      // ESC t n selects the code page, and it stays selected until changed —
+      // so it is set back afterwards, otherwise the next Latin line would be
+      // drawn with Arabic glyphs above 0x7F.
+      buf.push(0x1B, 0x74, arabic!.charsetId);
+      buf.push(...renderArabicLine(line, arabic!.codepage).bytes);
+      buf.push(0x1B, 0x74, 0x00);
+    } else {
+      buf.push(...Buffer.from(line, 'utf8'));
+    }
     buf.push(0x0A);
   }
 
