@@ -161,6 +161,7 @@ export default function OrdersPage() {
   const currency = getCurrencySymbol(currentTenant?.currency || 'INR', getCountryByCode(currentTenant?.country ?? 'IN')?.locale);
   // Weights read the way the scale label prints them, not with a decimal point.
   const locale = getCountryByCode(currentTenant?.country ?? 'MA')?.locale ?? 'fr-MA';
+  const isRestaurant = (currentTenant?.business_type ?? 'restaurant') === 'restaurant';
   const fmt = useFormatCurrency();
   const isOwnerOrManager = currentTenant?.role === 'owner' || currentTenant?.role === 'manager';
 
@@ -924,7 +925,14 @@ export default function OrdersPage() {
                     {(() => { const badge = orderStatusBadge[order.status]; return badge ? (
                       <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${badge.bg} ${badge.text}`}>{t(badge.labelKey)}</span>
                     ) : null; })()}
-                    <span className="text-sm text-muted-foreground capitalize">{t(orderTypeLabel[order.type] ?? order.type)}</span>
+                    {/* Restaurants only. "Dine in", "takeaway" and "delivery"
+                        are a restaurant's three ways of serving; a grocery has
+                        one, so the label sat on every row of the history saying
+                        nothing — and "consommation sur place" against a bag of
+                        flour reads as a mistake rather than as a category. */}
+                    {isRestaurant && (
+                      <span className="text-sm text-muted-foreground capitalize">{t(orderTypeLabel[order.type] ?? order.type)}</span>
+                    )}
                     {order.table && (
                       <span className="text-sm text-orange-600 font-medium">{order.table.name}</span>
                     )}

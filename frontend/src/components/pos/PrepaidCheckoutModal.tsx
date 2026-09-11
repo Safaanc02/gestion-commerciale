@@ -5,6 +5,7 @@ import { X, Sparkles, ArrowLeftRight, CheckCircle2, User, Plus, Trash2, Percent,
 import { Button } from '@/components/ui/button';
 import api from '@/lib/api';
 import { useCartStore } from '@/store/cart';
+import { useAuthStore } from '@/store/auth';
 import { useTaxPreview } from '@/hooks/use-tax-preview';
 import { useI18n } from '@/hooks/useI18n';
 import TaxBreakdown from '@/components/pos/TaxBreakdown';
@@ -54,6 +55,8 @@ interface Payment {
 
 export default function PrepaidCheckoutModal({ currency, onClose, onConfirm }: Props) {
   const cart = useCartStore();
+  const { currentTenant } = useAuthStore();
+  const isRestaurant = (currentTenant?.business_type ?? 'restaurant') === 'restaurant';
   const customer = cart.customer;
   const { t } = useI18n();
   const currencyFmt = useFormatCurrency();
@@ -261,9 +264,14 @@ export default function PrepaidCheckoutModal({ currency, onClose, onConfirm }: P
         <div className="flex items-center justify-between px-5 pt-5 pb-4 border-b border-border">
           <div>
             <h2 className="text-lg font-bold text-foreground">{t('pos.checkout')}</h2>
-            <p className="text-xs text-muted-foreground/70 mt-0.5 capitalize">
-              {t(`pos.orderTypeSuffix_${cart.orderType}` as 'pos.orderTypeSuffix_dine_in' | 'pos.orderTypeSuffix_takeaway' | 'pos.orderTypeSuffix_delivery' | 'pos.orderTypeSuffix_online')}
-            </p>
+            {/* Restaurants only. A grocery sells one way, so this line said
+                "external order" under the heading on every single sale — a
+                category nobody chose and nobody can act on. */}
+            {isRestaurant && (
+              <p className="text-xs text-muted-foreground/70 mt-0.5 capitalize">
+                {t(`pos.orderTypeSuffix_${cart.orderType}` as 'pos.orderTypeSuffix_dine_in' | 'pos.orderTypeSuffix_takeaway' | 'pos.orderTypeSuffix_delivery' | 'pos.orderTypeSuffix_online')}
+              </p>
+            )}
           </div>
           <button
             onClick={onClose}
