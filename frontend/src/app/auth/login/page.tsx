@@ -4,28 +4,25 @@ import { useState, useEffect, useRef, Suspense, useCallback } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { getLandingPage } from '@/components/layout/AuthGuard';
 import { useAuthStore } from '@/store/auth';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
+import { PinPad } from '@/components/auth/PinPad';
 import { Card, CardContent } from '@/components/ui/card';
 import toast from 'react-hot-toast';
 import { useI18n } from '@/hooks/useI18n';
 import { ROLE_LABEL_KEYS, BUSINESS_TYPE_LABEL_KEYS } from '@/lib/i18n-enums';
-import { Eye, EyeOff } from 'lucide-react';
 
 function LoginContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { login, selectTenant, user, tenants, currentTenant, loadFromStorage } = useAuthStore();
+  const { loginWithPin, selectTenant, user, tenants, currentTenant, loadFromStorage } = useAuthStore();
   const { t } = useI18n();
 
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [rememberMe, setRememberMe] = useState(false);
+  const [pin, setPin] = useState('');
+  // Kept true: a till is a shared machine that stays signed in through a
+  // shift. There is no checkbox to ask about it.
+  const rememberMe = true;
   const [loading, setLoading] = useState(false);
   const [dbError, setDbError] = useState<string | null>(null);
   const [loginError, setLoginError] = useState<string | null>(null);
-  const [showPassword, setShowPassword] = useState(false);
 
   useEffect(() => {
     fetch('/api/auth/setup/status')
@@ -76,12 +73,11 @@ function LoginContent() {
     return () => { active = false; };
   }, [user, tenants, currentTenant, router, selectTenant, t]);
 
-  const handleLogin = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleLogin = async () => {
     setLoading(true);
     setLoginError(null);
     try {
-      await login(email, password, rememberMe);
+      await loginWithPin(pin, rememberMe);
       toast.success(t('auth.signInSuccess'));
     } catch (err: unknown) {
       const error = err as { response?: { status?: number; data?: { error?: string; attempts_remaining?: number; lockout_minutes?: number } } };
@@ -101,7 +97,7 @@ function LoginContent() {
             t('auth.attemptsRemaining').replace('{count}', String(remaining))
           );
         } else {
-          setLoginError(t('auth.invalidCredentials'));
+          setLoginError(t('auth.invalidPin'));
         }
       } else if (status === 429) {
         // Middleware-level lockout (authRateLimit window exhausted)
@@ -162,48 +158,29 @@ function LoginContent() {
         )}
         <Card>
           <CardContent className="pt-6">
-            <form onSubmit={handleLogin} className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="email">{t('auth.email')}</Label>
-                <Input id="email" type="email" autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder={t('auth.emailPlaceholder')} required />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="password">{t('auth.password')}</Label>
-                <div className="relative">
-                  <Input id="password" type={showPassword ? 'text' : 'password'} autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder={t('auth.passwordPlaceholder')} className="pr-10" required />
-                  <button
-                    type="button"
-                    onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground focus:outline-none"
-                    tabIndex={-1}
-                  >
-                    {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
-                  </button>
-                </div>
-              </div>
-              <label className="flex items-center gap-2 text-sm text-muted-foreground select-none cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={rememberMe}
-                  onChange={(e) => setRememberMe(e.target.checked)}
-                  className="rounded border-input text-primary focus:ring-primary"
-                />
-                {t('auth.rememberMe')}
-              </label>
-              {loginError && (
-                <p className="text-sm text-destructive text-center">{loginError}</p>
-              )}
-              <Button type="submit" disabled={loading} className="w-full" size="lg">
-                {loading ? t('auth.signingIn') : t('auth.signIn')}
-              </Button>
+            <div className="pt-2">
+              {/* Keypad, not a form. Staff sign in between customers on a
+                  touch screen; an email field and a password field is friction
+                  paid on every shift, and a password long enough to be worth
+                  having is one nobody types standing up. */}
+              <PinPad
+                value={pin}
+                onChange={(next) => { setPin(next); setLoginError(null); }}
+                onSubmit={handleLogin}
+                canSubmit={pin.length >= 4}
+                busy={loading}
+                error={loginError}
+                label={t('auth.enterPin')}
+                submitLabel={loading ? t('auth.signingIn') : t('auth.signIn')}
+              />
               <button
                 type="button"
                 onClick={() => router.push('/auth/recover')}
-                className="w-full text-center text-sm text-muted-foreground hover:text-foreground transition-colors"
+                className="mt-4 w-full text-center text-sm text-muted-foreground hover:text-foreground transition-colors"
               >
-                {t('auth.forgotPasswordLink')}
+                {t('auth.forgotPin')}
               </button>
-            </form>
+            </div>
           </CardContent>
         </Card>
       </div>

@@ -1,9 +1,27 @@
-export type Language = 'en' | 'es' | 'pt';
+export type Language = 'en' | 'es' | 'pt' | 'fr' | 'ar';
 import en from './i18n/en.json';
 import es from './i18n/es.json';
 import pt from './i18n/pt.json';
+import fr from './i18n/fr.json';
+import ar from './i18n/ar.json';
 
-const translations: Record<Language, Record<string, string>> = { en, es, pt };
+/**
+ * 'ar' is Moroccan Darija written in Arabic script — the language spoken over
+ * the counter, not Modern Standard Arabic.
+ *
+ * Keys absent from a locale fall back to English (see `t` below), so a
+ * partially translated locale shows English rather than raw key names. fr and
+ * ar are translated for the screens staff use every shift; the deeper admin
+ * screens still read English.
+ */
+const translations: Record<Language, Record<string, string>> = { en, es, pt, fr, ar };
+
+/** Languages written right to left. */
+export const RTL_LANGUAGES: readonly Language[] = ['ar'];
+
+export function isRtl(lang: Language): boolean {
+  return RTL_LANGUAGES.includes(lang);
+}
 
 const PLURAL_RE = /\{(\w+),\s*plural,\s*((?:\s*(?:zero|one|two|few|many|other)\s*\{[^}]*\})+)\s*\}/g;
 const pluralRulesCache = new Map<string, Intl.PluralRules>();
@@ -20,7 +38,8 @@ function getPluralRules(locale: string): Intl.PluralRules {
 function formatIcuPlural(template: string, params: Record<string, string | number>, lang: Language): string {
   return template.replace(PLURAL_RE, (_match, name: string, cases: string) => {
     const raw = Number(params[name] ?? 0);
-    const locale = lang === 'es' ? 'es-AR' : lang === 'pt' ? 'pt-BR' : 'en';
+    const locale = lang === 'es' ? 'es-AR' : lang === 'pt' ? 'pt-BR'
+      : lang === 'fr' ? 'fr-MA' : lang === 'ar' ? 'ar-MA' : 'en';
     const pr = getPluralRules(locale).select(raw);
     const ordered = ['zero', 'one', 'two', 'few', 'many', 'other'];
     const seen: Record<string, string> = {};
@@ -55,6 +74,8 @@ export function getBrowserLanguage(): Language {
     const nav = navigator.language?.toLowerCase();
     if (nav?.startsWith('es')) return 'es';
     if (nav?.startsWith('pt')) return 'pt';
+    if (nav?.startsWith('fr')) return 'fr';
+    if (nav?.startsWith('ar')) return 'ar';
   }
   return 'en';
 }

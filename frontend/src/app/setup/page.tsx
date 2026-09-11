@@ -8,72 +8,51 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent } from '@/components/ui/card';
-import { ArrowLeft, ArrowRight, Check, Cloud, Database, KeyRound, Search, Sparkles, UtensilsCrossed, Eye, EyeOff } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Check, KeyRound, Eye, EyeOff } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { COUNTRIES, getCountryByCode, countryName, type Country } from '@/lib/countries';
-import { getBrowserLanguage, t as translate, type Language } from '@/lib/i18n';
+import { getCountryByCode, type Country } from '@/lib/countries';
+import { t as translate, type Language } from '@/lib/i18n';
+import { PinPad } from '@/components/auth/PinPad';
 
 type SetupProfile = 'empty' | 'express' | 'demo';
 type ServiceModel = 'qsr' | 'finedine';
 
-const SETUP_PROFILES: Array<{ value: SetupProfile; badge?: 'express' | null }> = [
-  { value: 'empty' },
-  { value: 'express', badge: 'express' },
-  { value: 'demo' },
-];
 
-const SERVICE_MODELS: Array<{ value: ServiceModel }> = [
-  { value: 'qsr' },
-  { value: 'finedine' },
-];
 
-// Mirrors main/services/cloud-sync.ts DEFAULT_CLOUD_SERVER_URL — kept in sync
-// manually since the frontend can't import backend TS modules directly.
-const DEFAULT_CLOUD_SERVER_URL = 'https://blue.flopos.com/';
 
 export default function SetupPage() {
   const { logout } = useAuthStore();
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
-  const [showPassword, setShowPassword] = useState(false);
-  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [showMasterPin, setShowMasterPin] = useState(false);
   const [showConfirmMasterPin, setShowConfirmMasterPin] = useState(false);
-  const [profile, setProfile] = useState<SetupProfile>('express');
-  const [serviceModel, setServiceModel] = useState<ServiceModel>('qsr');
-  const [language, setLanguage] = useState<Language>(() => getBrowserLanguage());
-  const [browserLanguage] = useState<Language>(() => getBrowserLanguage());
-  const [country, setCountry] = useState<string>('IN');
-  const [countryQuery, setCountryQuery] = useState<string>('');
-  const [form, setForm] = useState({
-    name: '',
-    email: '',
-    password: '',
-    confirmPassword: '',
-    business_name: '',
-  });
+  // 'empty' — the shop's catalogue comes from its existing system, not from
+  // sample data. Demo products in a live till are a trap: they get sold.
+  const profile: SetupProfile = 'empty';
+  // A grocery collects payment at the till, always. The value is still sent
+  // and stored so it can be changed later in Settings, but it is not asked.
+  const serviceModel: ServiceModel = 'qsr';
+  // Darija by default: the shop floor language. Switchable here and later in
+  // Settings.
+  const [language, setLanguage] = useState<Language>('ar');
+  // Fixed: this build is for Moroccan shops. Kept as a named constant rather
+  // than inlined so the country still flows through to currency, timezone and
+  // tax resolution exactly as before.
+  const country = 'MA';
+  const [showOtherLanguages, setShowOtherLanguages] = useState(false);
+  const [form, setForm] = useState({ business_name: '' });
+  const [ownerPin, setOwnerPin] = useState('');
+  // null while choosing; a string once the PIN is being confirmed.
+  const [ownerPinConfirm, setOwnerPinConfirm] = useState<string | null>(null);
+  const [pinError, setPinError] = useState<string | null>(null);
   const [termsAccepted, setTermsAccepted] = useState(false);
-  const [productUpdates, setProductUpdates] = useState(false);
-  const [marketing, setMarketing] = useState(false);
-  const passwordsEntered = form.password.length > 0 && form.confirmPassword.length > 0;
-  const passwordsMatch = !passwordsEntered || form.password === form.confirmPassword;
 
   const [masterPinAvailable, setMasterPinAvailable] = useState<boolean | null>(null);
   const [masterPin, setMasterPin] = useState('');
   const [masterPinConfirm, setMasterPinConfirm] = useState('');
   const masterPinValid = /^\d{4}$/.test(masterPin) && masterPin === masterPinConfirm;
 
-  const cloudEnabled = true;
-  const [cloudServerUrl, setCloudServerUrl] = useState(DEFAULT_CLOUD_SERVER_URL);
 
-  const isPasswordValid = (password: string) => {
-    if (!password || password.length < 8) return false;
-    if (!/[A-Z]/.test(password)) return false;
-    if (!/[a-z]/.test(password)) return false;
-    if (!/[0-9]/.test(password)) return false;
-    return true;
-  };
-  const passwordMeetsRequirements = form.password.length === 0 || isPasswordValid(form.password);
 
   useEffect(() => {
     let mounted = true;
@@ -98,18 +77,6 @@ export default function SetupPage() {
   }, []);
 
   const selectedCountry: Country | undefined = getCountryByCode(country);
-  const q = countryQuery.trim().toLowerCase();
-  const languageOptions: Language[] = browserLanguage === 'es' ? ['es', 'pt', 'en'] : browserLanguage === 'pt' ? ['pt', 'es', 'en'] : ['en', 'es', 'pt'];
-  const filteredCountries = COUNTRIES.filter((c) => {
-    if (!q) return true;
-    return (
-      countryName(c.code).toLowerCase().includes(q) ||
-      c.code.toLowerCase().includes(q) ||
-      c.currency.toLowerCase().includes(q) ||
-      (c.locale ?? '').toLowerCase().includes(q)
-    );
-  });
-
   const t = (key: string) => translate(key, language);
 
   const completeSetup = () => {
@@ -123,17 +90,10 @@ export default function SetupPage() {
     window.location.replace('/auth/login');
   };
 
+  /** The PIN must be chosen, confirmed, and the disclaimer accepted. */
   const validateOwner = () => {
-    if (!form.name.trim() || !form.email.trim() || !form.password) {
-      toast.error(t('setup.errorNameRequired'));
-      return false;
-    }
-    if (!isPasswordValid(form.password)) {
-      toast.error(t('setup.errorPasswordRequirementsNotMet'));
-      return false;
-    }
-    if (form.password !== form.confirmPassword) {
-      toast.error(t('setup.errorPasswordMismatch'));
+    if (!/^\d{4,8}$/.test(ownerPin) || ownerPinConfirm !== ownerPin) {
+      toast.error(t('setup.pinRequired'));
       return false;
     }
     if (!termsAccepted) {
@@ -141,11 +101,6 @@ export default function SetupPage() {
       return false;
     }
     return true;
-  };
-
-  const handleOwnerSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (validateOwner()) setStep(4);
   };
 
   const handleCompleteSetup = async () => {
@@ -160,23 +115,6 @@ export default function SetupPage() {
       return;
     }
 
-    if (cloudEnabled && cloudServerUrl.trim()) {
-      try {
-        const parsed = new URL(cloudServerUrl.trim());
-        const localHttp = parsed.protocol === 'http:'
-          && ['localhost', '127.0.0.1', '::1', '[::1]'].includes(parsed.hostname);
-        if (parsed.protocol !== 'https:' && !localHttp) {
-          toast.error('Cloud server URL must use HTTPS (or local HTTP for development)');
-          setStep(5);
-          return;
-        }
-      } catch {
-        toast.error('Please enter a valid Cloud server URL');
-        setStep(5);
-        return;
-      }
-    }
-
     setLoading(true);
     try {
       const countryProfile = selectedCountry;
@@ -189,19 +127,23 @@ export default function SetupPage() {
       };
 
       await api.post('/auth/setup/initialize', {
-        name: form.name,
-        email: form.email,
-        password: form.password,
-        business_type: 'restaurant',
+        owner_pin: ownerPin,
+        // Grocery till, not a restaurant — see seedInstallDefaults in main/db.ts.
+        business_type: 'retail',
         business_name: form.business_name || undefined,
         setup_profile: profile,
         service_model: serviceModel,
         terms_accepted: termsAccepted,
         master_pin: masterPinAvailable ? masterPin : undefined,
-        cloud_sync_enabled: true,
-        cloud_server_url: cloudServerUrl.trim() || DEFAULT_CLOUD_SERVER_URL,
-        email_product_updates: productUpdates,
-        email_marketing: marketing,
+        // Cloud sync stays OFF. Upstream's setup registers the shop with
+        // blue.flopos.com — the original vendor's servers — and its
+        // zero-touch registration creates the remote store immediately. This
+        // shop has no relationship with that vendor, so its sales must not
+        // leave the premises. The feature is still in the code and can be
+        // turned on from Settings, pointed wherever the owner chooses.
+        cloud_sync_enabled: false,
+        email_product_updates: false,
+        email_marketing: false,
         ...countryPayload,
       });
       completeSetup();
@@ -223,7 +165,7 @@ export default function SetupPage() {
         </div>
 
         <div className="flex justify-center gap-2 mb-8">
-          {[1, 2, 3, 4, 5, 6].map((s) => (
+          {[1, 2, 3, 4].map((s) => (
             <div
               key={s}
               className={`w-3 h-3 rounded-full transition-colors ${
@@ -239,27 +181,35 @@ export default function SetupPage() {
               <div className="space-y-6">
                 <div className="text-center">
                   <h2 className="text-xl font-semibold mb-2">{t('setup.chooseLanguage')}</h2>
-                  <p className="text-muted-foreground text-sm">
-                    {t('setup.chooseLanguageHint')}
-                  </p>
+                  <p className="text-muted-foreground text-sm">{t('setup.chooseLanguageHint')}</p>
                 </div>
 
+                {/* Two languages, side by side, nothing to scroll.
+                    The country picker that used to sit under this is gone: this
+                    build is for Moroccan shops, so the country is Morocco. It
+                    was a list of 35 countries asked once and never revisited,
+                    with a wrong answer silently setting the wrong currency and
+                    tax rules. */}
                 <div className="grid gap-3 sm:grid-cols-2">
-                  {languageOptions.map((option) => {
+                  {(['ar', 'fr'] as const).map((option) => {
                     const selected = language === option;
-                    const label = option === 'es' ? t('setup.languageSpanish') : option === 'pt' ? t('setup.languagePortuguese') : t('setup.languageEnglish');
                     return (
                       <button
                         key={option}
                         onClick={() => setLanguage(option)}
-                        className={`p-4 rounded-xl border-2 text-left transition-all ${
-                          selected ? 'border-primary bg-primary/5' : 'border-gray-200 hover:border-gray-300'
+                        dir={option === 'ar' ? 'rtl' : 'ltr'}
+                        className={`p-6 rounded-xl border-2 transition-all ${
+                          selected ? 'border-primary bg-primary/5' : 'border-border hover:border-input'
                         }`}
                       >
                         <div className="flex items-center justify-between gap-3">
-                          <div>
-                            <div className="font-semibold">{label}</div>
-                            <div className="text-xs text-muted-foreground mt-1">{option.toUpperCase()}</div>
+                          <div className="text-start">
+                            <div className="text-xl font-semibold">
+                              {option === 'ar' ? 'الدارجة' : 'Français'}
+                            </div>
+                            <div className="text-xs text-muted-foreground mt-1">
+                              {option === 'ar' ? 'المغربية' : 'Maroc'}
+                            </div>
                           </div>
                           {selected && <Check className="w-5 h-5 text-primary shrink-0" />}
                         </div>
@@ -268,48 +218,35 @@ export default function SetupPage() {
                   })}
                 </div>
 
-                <div className="space-y-3">
-                  <div>
-                    <h3 className="text-sm font-medium">{t('setup.chooseCountry')}</h3>
-                    <p className="text-muted-foreground text-sm mt-1">{t('setup.chooseCountryHint')}</p>
-                  </div>
+                <button
+                  type="button"
+                  onClick={() => setShowOtherLanguages((v) => !v)}
+                  className="w-full text-center text-sm text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  {t('setup.otherLanguages')}
+                </button>
 
-                  <div className="relative">
-                    <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
-                    <Input
-                      value={countryQuery}
-                      onChange={(e) => setCountryQuery(e.target.value)}
-                      placeholder={t('setup.searchPlaceholder')}
-                      className="pl-9"
-                    />
+                {showOtherLanguages && (
+                  <div className="grid gap-2 sm:grid-cols-3">
+                    {(['en', 'es', 'pt'] as const).map((option) => {
+                      const selected = language === option;
+                      const label = option === 'es' ? t('setup.languageSpanish')
+                        : option === 'pt' ? t('setup.languagePortuguese')
+                          : t('setup.languageEnglish');
+                      return (
+                        <button
+                          key={option}
+                          onClick={() => setLanguage(option)}
+                          className={`p-3 rounded-lg border-2 text-sm transition-all ${
+                            selected ? 'border-primary bg-primary/5' : 'border-border hover:border-input'
+                          }`}
+                        >
+                          {label}
+                        </button>
+                      );
+                    })}
                   </div>
-                </div>
-
-                <div className="grid gap-2 max-h-72 overflow-y-auto">
-                  {filteredCountries.map((c) => {
-                    const selected = country === c.code;
-                    return (
-                      <button
-                        key={c.code}
-                        onClick={() => setCountry(c.code)}
-                        className={`p-3 rounded-xl border-2 text-left transition-all flex items-center justify-between ${
-                          selected ? 'border-primary bg-primary/5' : 'border-gray-200 hover:border-gray-300'
-                        }`}
-                      >
-                        <div>
-                          <div className="font-semibold">{countryName(c.code)}</div>
-                          <div className="text-xs text-muted-foreground">
-                            {c.currency} · {c.taxIdLabel || t('setup.noTaxId')} · {c.locale}
-                          </div>
-                        </div>
-                        {selected && <Check className="w-5 h-5 text-primary" />}
-                      </button>
-                    );
-                  })}
-                  {q && filteredCountries.length === 0 && (
-                    <p className="text-center text-gray-500 py-6 text-sm">{t('setup.noMatches').replace('{query}', countryQuery)}</p>
-                  )}
-                </div>
+                )}
 
                 <Button onClick={() => setStep(2)} className="w-full" size="lg">
                   {t('setup.continue')} <ArrowRight className="w-4 h-4 ml-2" />
@@ -417,153 +354,62 @@ export default function SetupPage() {
                 </button>
 
                 <div className="text-center">
-                  <h2 className="text-xl font-semibold mb-2">{t('setup.createOwner')}</h2>
-                  <p className="text-muted-foreground text-sm">{t('setup.ownerSubtitle')}</p>
+                  <h2 className="text-xl font-semibold mb-2">{t('setup.ownerPinTitle')}</h2>
+                  <p className="text-muted-foreground text-sm">{t('setup.ownerPinSubtitle')}</p>
                 </div>
 
-                <form onSubmit={handleOwnerSubmit} className="space-y-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="name">{t('setup.ownerName')}</Label>
-                    <Input
-                      id="name"
-                      value={form.name}
-                      onChange={(e) => setForm({ ...form, name: e.target.value })}
-                      placeholder={t('setup.ownerNamePlaceholder')}
-                      required
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="email">{t('setup.ownerEmail')}</Label>
-                    <Input
-                      id="email"
-                      type="email"
-                      autoComplete="email"
-                      value={form.email}
-                      onChange={(e) => setForm({ ...form, email: e.target.value })}
-                      placeholder={t('setup.ownerEmailPlaceholder')}
-                      required
-                    />
-                  </div>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="password">{t('setup.password')}</Label>
-                      <div className="relative">
-                        <Input
-                          id="password"
-                          type={showPassword ? "text" : "password"}
-                          autoComplete="new-password"
-                          value={form.password}
-                          onChange={(e) => setForm({ ...form, password: e.target.value })}
-                          placeholder={t('setup.passwordPlaceholder')}
-                          className="pr-10"
-                          required
-                        />
-                        <button
-                          type="button"
-                          onClick={() => setShowPassword(!showPassword)}
-                          className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground focus:outline-none"
-                          tabIndex={-1}
-                        >
-                          {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
-                        </button>
-                      </div>
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="confirmPassword">{t('setup.confirmPassword')}</Label>
-                      <div className="relative">
-                        <Input
-                          id="confirmPassword"
-                          type={showConfirmPassword ? "text" : "password"}
-                          autoComplete="new-password"
-                          value={form.confirmPassword}
-                          onChange={(e) => setForm({ ...form, confirmPassword: e.target.value })}
-                          placeholder={t('setup.confirmPasswordPlaceholder')}
-                          className="pr-10"
-                          required
-                        />
-                        <button
-                          type="button"
-                          onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                          className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground focus:outline-none"
-                          tabIndex={-1}
-                        >
-                          {showConfirmPassword ? <EyeOff size={16} /> : <Eye size={16} />}
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                  {!passwordMeetsRequirements && (
-                    <p className="text-xs font-medium text-red-600">
-                      Password must be at least 8 characters long and contain at least one uppercase letter, one lowercase letter, and one number.
-                    </p>
-                  )}
-                  {passwordsEntered && (
-                    <p className={`text-xs font-medium ${passwordsMatch ? 'text-green-600' : 'text-red-600'}`}>
-                      {passwordsMatch ? t('setup.passwordsMatch') : t('setup.passwordsMismatch')}
-                    </p>
-                  )}
-                  <div className="space-y-2">
-                    <Label htmlFor="business_name">{t('setup.businessName')}</Label>
-                    <Input
-                      id="business_name"
-                      value={form.business_name}
-                      onChange={(e) => setForm({ ...form, business_name: e.target.value })}
-                      placeholder={t('setup.businessNamePlaceholder')}
-                    />
-                  </div>
+                <div className="space-y-2">
+                  <Label htmlFor="shop-name">{t('setup.businessName')}</Label>
+                  <Input
+                    id="shop-name"
+                    value={form.business_name}
+                    onChange={(e) => setForm({ ...form, business_name: e.target.value })}
+                    placeholder={t('setup.businessNamePlaceholder')}
+                  />
+                </div>
 
-                  <label className="flex items-start gap-2 text-sm text-muted-foreground">
-                    <input
-                      type="checkbox"
-                      checked={termsAccepted}
-                      onChange={(e) => setTermsAccepted(e.target.checked)}
-                      className="mt-0.5 h-4 w-4 rounded border-gray-300"
-                      required
-                    />
-                    <span>
-                      {t('setup.termsIntro')}{' '}
-                      <a href="https://flopos.com/terms" target="_blank" rel="noopener noreferrer" className="text-primary underline">
-                        {t('setup.terms')}
-                      </a>
-                      ,{' '}
-                      <a href="https://flopos.com/privacy" target="_blank" rel="noopener noreferrer" className="text-primary underline">
-                        {t('setup.privacy')}
-                      </a>
-                      , and{' '}
-                      <a href="https://flopos.com/disclaimer" target="_blank" rel="noopener noreferrer" className="text-primary underline">
-                        {t('setup.disclaimer')}
-                      </a>
-                      .
-                    </span>
-                  </label>
+                {/* No account to create: the owner picks a PIN, twice. There is
+                    no email to verify, no password rules to explain, and
+                    nothing to recover through a mailbox the shop may not have. */}
+                <PinPad
+                  value={ownerPinConfirm === null ? ownerPin : ownerPinConfirm}
+                  onChange={(next: string) => {
+                    setPinError(null);
+                    if (ownerPinConfirm === null) setOwnerPin(next);
+                    else setOwnerPinConfirm(next);
+                  }}
+                  onSubmit={() => {
+                    setPinError(null);
+                    if (ownerPinConfirm === null) {
+                      if (ownerPin.length < 4) return;
+                      setOwnerPinConfirm('');
+                      return;
+                    }
+                    if (ownerPinConfirm !== ownerPin) {
+                      // Cleared rather than corrected: a mistyped PIN chosen
+                      // here locks the shop out of its own till on Monday.
+                      setPinError(t('setup.pinMismatch'));
+                      setOwnerPin('');
+                      setOwnerPinConfirm(null);
+                      return;
+                    }
+                    setStep(4);
+                  }}
+                  canSubmit={(ownerPinConfirm === null ? ownerPin : ownerPinConfirm).length >= 4}
+                  error={pinError}
+                  label={ownerPinConfirm === null ? t('setup.pinChoose') : t('setup.pinConfirm')}
+                  submitLabel={ownerPinConfirm === null ? t('setup.continue') : t('setup.pinValidate')}
+                />
 
-                  <div className="rounded-lg border border-border bg-muted/30 px-3 py-3 text-sm text-muted-foreground">
-                    <p className="font-medium text-foreground">{t('setup.anonymousDataTitle')}</p>
-                    <p className="mt-1">{t('setup.anonymousDataDescription')}</p>
-                    <details className="mt-2">
-                      <summary className="cursor-pointer text-primary">{t('setup.anonymousDataDetails')}</summary>
-                      <p className="mt-1">{t('setup.anonymousDataFields')}</p>
-                    </details>
-                  </div>
-
-                  <div className="space-y-3 rounded-lg border border-border px-3 py-3 text-sm">
-                    <p className="font-medium text-foreground">Email communication</p>
-                    <p className="text-muted-foreground">We will send a welcome email immediately so you can verify this address. Essential account, service, and security notices are not promotional and cannot be disabled here.</p>
-                    <label className="flex items-start gap-2">
-                      <input type="checkbox" checked={productUpdates} onChange={(e) => setProductUpdates(e.target.checked)} className="mt-0.5 h-4 w-4 rounded border-gray-300" />
-                      <span>Receive product updates and release notes (optional)</span>
-                    </label>
-                    <label className="flex items-start gap-2">
-                      <input type="checkbox" checked={marketing} onChange={(e) => setMarketing(e.target.checked)} className="mt-0.5 h-4 w-4 rounded border-gray-300" />
-                      <span>Receive marketing messages, offers, and surveys (optional)</span>
-                    </label>
-                  </div>
-
-
-                  <Button type="submit" disabled={!passwordsMatch || !termsAccepted || !isPasswordValid(form.password)} className="w-full" size="lg">
-                    {t('setup.continue')} <ArrowRight className="w-4 h-4 ml-2" />
-                  </Button>
-                </form>
+                <label className="flex items-start gap-2 text-sm text-muted-foreground">
+                  <input
+                    type="checkbox"
+                    checked={termsAccepted}
+                    onChange={(e) => setTermsAccepted(e.target.checked)}
+                    className="mt-0.5 h-4 w-4 rounded border-input"
+                  />
+                  <span>{t('setup.disclaimer')}</span>
+                </label>
               </div>
             )}
 
@@ -577,141 +423,32 @@ export default function SetupPage() {
                 </button>
 
                 <div className="text-center">
-                  <h2 className="text-xl font-semibold mb-2">{t('setup.setupDataTitle')}</h2>
-                  <p className="text-muted-foreground text-sm">{t('setup.setupDataSubtitle')}</p>
-                </div>
-
-                <div className="grid gap-4">
-                  {SETUP_PROFILES.map((item) => {
-                    const selected = profile === item.value;
-                    const Icon = item.value === 'demo' ? Database : item.value === 'express' ? Sparkles : UtensilsCrossed;
-                    return (
-                      <button
-                        key={item.value}
-                        onClick={() => setProfile(item.value)}
-                        className={`p-4 rounded-xl border-2 text-left transition-all ${
-                          selected ? 'border-primary bg-primary/5' : 'border-gray-200 hover:border-gray-300'
-                        }`}
-                      >
-                        <div className="flex items-start gap-4">
-                          <div className="w-11 h-11 rounded-xl bg-primary/10 flex items-center justify-center">
-                            <Icon className="w-5 h-5 text-primary" />
-                          </div>
-                          <div className="flex-1">
-                            <div className="flex items-center gap-2">
-                              <span className="font-semibold">{t(`setup.${item.value}Label`)}</span>
-                              {item.badge && (
-                                <span className="rounded-full bg-primary px-2 py-0.5 text-xs text-primary-foreground">
-                                  {t('setup.expressBadge')}
-                                </span>
-                              )}
-                            </div>
-                            <div className="text-sm text-muted-foreground mt-1">{t(`setup.${item.value}Desc`)}</div>
-                            <div className="text-xs text-muted-foreground mt-2">{t(`setup.${item.value}Details`)}</div>
-                          </div>
-                          {selected && <Check className="w-5 h-5 text-primary" />}
-                        </div>
-                      </button>
-                    );
-                  })}
-                </div>
-
-                <Button onClick={() => setStep(5)} className="w-full" size="lg">
-                  {t('setup.continue')} <ArrowRight className="w-4 h-4 ml-2" />
-                </Button>
-              </div>
-            )}
-
-            {step === 5 && (
-              <div className="space-y-6">
-                <button
-                  onClick={() => setStep(4)}
-                  className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors"
-                >
-                  <ArrowLeft className="w-4 h-4" /> {t('setup.back')}
-                </button>
-
-                <div className="text-center">
-                  <div className="w-11 h-11 rounded-xl bg-primary/10 flex items-center justify-center mx-auto mb-3">
-                    <Cloud className="w-5 h-5 text-primary" />
-                  </div>
-                  <h2 className="text-xl font-semibold mb-2">{t('setup.cloudTitle')}</h2>
-                  <p className="text-muted-foreground text-sm">{t('setup.cloudSubtitle')}</p>
-                </div>
-
-                <label className="flex items-start gap-3 cursor-pointer p-4 rounded-xl border-2 border-gray-200">
-                  <input
-                    type="checkbox"
-                    checked={cloudEnabled}
-                    disabled
-                    className="mt-0.5 h-4 w-4 rounded border-gray-300"
-                  />
-                  <span>
-                    <span className="font-medium text-foreground">Cloud Services are enabled automatically</span>
-                    <span className="block text-sm text-muted-foreground mt-1">FloCafe connects automatically so RevFlo pairing and support work without a manual approval step.</span>
-                  </span>
-                </label>
-
-                {cloudEnabled && (
-                  <div className="space-y-2">
-                    <Label htmlFor="cloud-server-url">{t('setup.cloudUrlLabel')}</Label>
-                    <Input
-                      id="cloud-server-url"
-                      type="url"
-                      value={cloudServerUrl}
-                      onChange={(e) => setCloudServerUrl(e.target.value)}
-                      placeholder={DEFAULT_CLOUD_SERVER_URL}
-                    />
-                    <p className="text-xs text-muted-foreground">{t('setup.cloudUrlHint')}</p>
-                  </div>
-                )}
-
-                <p className="text-xs text-muted-foreground bg-muted rounded-lg p-3">
-                  {cloudEnabled ? t('setup.cloudRecoveryNoteEnabled') : t('setup.cloudRecoveryNoteDisabled')}
-                </p>
-
-                <Button onClick={() => setStep(6)} className="w-full" size="lg">
-                  {t('setup.continue')} <ArrowRight className="w-4 h-4 ml-2" />
-                </Button>
-              </div>
-            )}
-
-            {step === 6 && (
-              <div className="space-y-6">
-                <button
-                  onClick={() => setStep(5)}
-                  className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors"
-                >
-                  <ArrowLeft className="w-4 h-4" /> {t('setup.back')}
-                </button>
-
-                <div className="text-center">
                   <h2 className="text-xl font-semibold mb-2">{t('setup.flowTitle')}</h2>
                   <p className="text-muted-foreground text-sm">{t('setup.flowSubtitle')}</p>
                 </div>
 
-                <div className="grid gap-4 md:grid-cols-2">
-                  {SERVICE_MODELS.map((item) => {
-                    const selected = serviceModel === item.value;
-                    return (
-                      <button
-                        key={item.value}
-                        onClick={() => setServiceModel(item.value)}
-                        className={`p-5 rounded-xl border-2 text-left transition-all ${
-                          selected ? 'border-primary bg-primary/5' : 'border-gray-200 hover:border-gray-300'
-                        }`}
-                      >
-                        <div className="flex items-start justify-between gap-3">
-                          <div>
-                            <div className="font-semibold text-lg">{t(`setup.${item.value}Label`)}</div>
-                            <div className="text-sm text-muted-foreground mt-1">{t(`setup.${item.value}Desc`)}</div>
-                            <div className="text-xs text-muted-foreground mt-3">{t(`setup.${item.value}Details`)}</div>
-                          </div>
-                          {selected && <Check className="w-5 h-5 text-primary shrink-0" />}
-                        </div>
-                      </button>
-                    );
-                  })}
+                {/* No service-model choice here.
+                    Upstream asks whether the outlet is quick-service or
+                    table-service, which decides when payment is collected. A
+                    grocery has only one answer — the customer pays at the till
+                    before leaving — so the question is friction, and the
+                    prepaid model is simply used. The setting still exists and
+                    can be changed later in Settings for anyone who needs it. */}
+                <div className="rounded-xl border bg-muted/30 p-5 text-sm text-muted-foreground">
+                  <ul className="space-y-2">
+                    <li className="flex items-start gap-2">
+                      <Check className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+                      <span>{t('setup.readyScan')}</span>
+                    </li>
+                    <li className="flex items-start gap-2">
+                      <Check className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+                      <span>{t('setup.readyWeigh')}</span>
+                    </li>
+                    <li className="flex items-start gap-2">
+                      <Check className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+                      <span>{t('setup.readyPrint')}</span>
+                    </li>
+                  </ul>
                 </div>
 
                 <Button onClick={handleCompleteSetup} disabled={loading} className="w-full" size="lg">

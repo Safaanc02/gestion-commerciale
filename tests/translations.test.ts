@@ -32,6 +32,13 @@ const FILES = [
   { lang: 'pt', file: path.join(I18N_DIR, 'pt.json') },
 ] as const;
 
+/**
+ * Locales translated screen by screen rather than all at once. They are held
+ * to a weaker rule than en/es/pt: incomplete is allowed (t() falls back to
+ * English per key), a key English does not have is not.
+ */
+const PROGRESSIVE_LANGS = ['fr', 'ar'] as const;
+
 function assert(condition: boolean, msg: string): void {
   if (!condition) throw new Error(`Assertion failed: ${msg}`);
 }
@@ -181,6 +188,32 @@ async function run(): Promise<void> {
     assert(false, 'untranslated t() keys referenced in the frontend');
   }
   console.log(`  ✓ no undefined keys (${called.size} t() calls covered)`);
+
+  // 5. Progressive locales (fr, ar) may be incomplete — t() falls back to
+  // English key by key, so a partial file shows English rather than raw key
+  // names. What must NOT happen is a key that exists ONLY in one of them:
+  // that is a typo which will never render, and the fallback hides it.
+  const english = loaded.get('en')!;
+  for (const lang of PROGRESSIVE_LANGS) {
+    const file = path.join(I18N_DIR, `${lang}.json`);
+    if (!fs.existsSync(file)) continue;
+    const dict = JSON.parse(fs.readFileSync(file, 'utf8')) as Record<string, string>;
+    const stray = Object.keys(dict).filter((k) => !(k in english));
+    if (stray.length) {
+      console.error(`\nKeys in ${lang}.json that do not exist in en.json (${stray.length}):`);
+      for (const k of stray) console.error(`  - ${k}`);
+      assert(false, `${lang}.json defines keys English does not — they will never render`);
+    }
+    const malformedProgressive = Object.entries(dict)
+      .map(([k, v]) => ({ k, reason: isMalformedValue(v) }))
+      .filter((entry) => entry.reason);
+    if (malformedProgressive.length) {
+      for (const entry of malformedProgressive) console.error(`  - [${lang}] ${entry.k} — ${entry.reason}`);
+      assert(false, `malformed values in ${lang}.json`);
+    }
+    const pct = Math.round((Object.keys(dict).length / Object.keys(english).length) * 100);
+    console.log(`  ✓ ${lang}.json: ${Object.keys(dict).length}/${Object.keys(english).length} keys (${pct}%), no stray keys`);
+  }
 
   console.log('\n✅ All translation integrity checks passed.');
 }

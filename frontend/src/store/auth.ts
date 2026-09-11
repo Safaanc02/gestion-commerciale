@@ -18,6 +18,8 @@ interface AuthState {
   loading: boolean;
 
   login: (email: string, password: string, rememberMe?: boolean) => Promise<void>;
+  /** Keypad sign-in — the primary path on a till. */
+  loginWithPin: (pin: string, rememberMe?: boolean) => Promise<void>;
   register: (data: RegisterData) => Promise<void>;
   selectTenant: (tenantId: number) => Promise<void>;
   logout: () => void;
@@ -44,6 +46,21 @@ export const useAuthStore = create<AuthState>((set) => ({
 
   login: async (email: string, password: string, rememberMe = false) => {
     const { data } = await api.post('/auth/login', { email, password, rememberMe });
+    localStorage.setItem('token', data.access_token);
+    const tenants: Tenant[] = data.tenants;
+    const currentTenant = tenants.length === 1 ? tenants[0] : null;
+    if (currentTenant) localStorage.setItem('tenant', JSON.stringify(currentTenant));
+    set({
+      user: data.user,
+      token: data.access_token,
+      tenants,
+      currentTenant,
+    });
+    syncTenantLanguage(currentTenant);
+  },
+
+  loginWithPin: async (pin: string, rememberMe = false) => {
+    const { data } = await api.post('/auth/login', { pin, rememberMe });
     localStorage.setItem('token', data.access_token);
     const tenants: Tenant[] = data.tenants;
     const currentTenant = tenants.length === 1 ? tenants[0] : null;
