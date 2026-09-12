@@ -884,7 +884,7 @@ export default function POSPage() {
                     try {
                       const response = await api.post('/support-ticket', {
                         ...supportError.payload,
-                        subject: 'FloCafe printing problem',
+                        subject: 'Tijarti printing problem',
                         correlation_id: crypto.randomUUID(),
                         client_ticket_id: clientTicketId,
                       });

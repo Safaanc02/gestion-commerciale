@@ -188,8 +188,8 @@
     "ws": "^8.21.2"
   },
   "build": {
-    "appId": "io.terros.gestioncommerciale",
-    "productName": "Gestion Commerciale",
+    "appId": "io.terros.tijarti",
+    "productName": "Tijarti",
     "icon": "assets/icon-512.png",
     "afterPack": "scripts/afterPack.js",
     "asar": true,
@@ -339,11 +339,11 @@
       ],
       "desktop": {
         "entry": {
-          "Name": "Flo Cafe",
-          "Comment": "Free, open-source POS for cafes and restaurants",
+          "Name": "Tijarti",
+          "Comment": "Gestion commerciale pour commerce de detail",
           "GenericName": "Point of Sale",
-          "Keywords": "pos;point of sale;restaurant;cafe;billing;invoice;",
-          "StartupWMClass": "flo-desktop"
+          "Keywords": "pos;point of sale;caisse;epicerie;superette;facturation;",
+          "StartupWMClass": "tijarti"
         }
       }
     },

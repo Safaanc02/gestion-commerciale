@@ -2880,7 +2880,7 @@ export default function SettingsPage() {
                 )}
                 <div className="mt-4 flex flex-wrap gap-3">
                   <Button variant="outline" onClick={async () => {
-                    if (!await confirm('Stop all FloCafe cloud services, identified diagnostics, and future anonymous telemetry on this device? Local POS data will remain available.')) return;
+                    if (!await confirm('Stop all Tijarti cloud services, identified diagnostics, and future anonymous telemetry on this device? Local POS data will remain available.')) return;
                     try { await api.post('/settings/cloud/stop-all'); toast.success('All cloud services and telemetry stopped'); }
                     catch { toast.error('Could not stop cloud services'); }
                   }}><CloudOff size={16} className="mr-2" />Stop all cloud services</Button>
@@ -3986,12 +3986,12 @@ export default function SettingsPage() {
         <TabsContent value="about">
           <div className="pb-6 max-w-3xl space-y-6">
             <div className="bg-card rounded-xl border border-border p-6">
-              <h2 className="font-semibold text-foreground mb-4">{t('settings.aboutFloCafe')}</h2>
+              <h2 className="font-semibold text-foreground mb-4">{t('settings.aboutTijarti')}</h2>
               <p className="text-sm text-muted-foreground mb-6">
                 {t('settings.aboutDescription')}
               </p>
               <div className="space-y-3">
-                <a href="https://github.com/FreeOpenSourcePOS/FloCafe" target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-brand hover:underline">
+                <a href="https://github.com/FreeOpenSourcePOS/Tijarti" target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-brand hover:underline">
                   <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M15 22v-4a4.8 4.8 0 0 0-1-3.5c3 0 6-2 6-5.5.08-1.25-.27-2.48-1-3.5.28-1.15.28-2.35 0-3.5 0 0-1 0-3 1.5-2.64-.5-5.36-.5-8 0C6 2 5 2 5 2c-.3 1.15-.3 2.35 0 3.5A5.403 5.403 0 0 0 4 9c0 3.5 3 5.5 6 5.5-.39.49-.68 1.05-.85 1.65-.17.6-.22 1.23-.15 1.85v4"/><path d="M9 18c-4.51 2-5-2-7-2"/></svg>
                   GitHub Repository
                 </a>
