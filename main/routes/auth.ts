@@ -855,16 +855,24 @@ router.post('/setup/initialize', (req: Request, res: Response) => {
       return res.status(400).json({ error: 'Invalid service model' });
     }
 
-    // Cloud v2 registers the POS automatically on first boot. There is no
-    // pending/claim step, so new installs start with cloud coordination on.
-    const cloudSyncEnabled = true;
-    let normalizedCloudServerUrl: string | undefined;
-    if (cloudSyncEnabled) {
-      try {
-        normalizedCloudServerUrl = normalizeCloudServerUrl(cloud_server_url || DEFAULT_CLOUD_SERVER_URL);
-      } catch {
-        return res.status(400).json({ error: 'Cloud server URL must be a valid HTTPS URL' });
-      }
+    // Upstream hardcoded this to `true`: cloud v2 registered the POS on first
+    // boot with no claim step, so every new install started with coordination
+    // on and the `cloud_sync_enabled` field in the request body was read by
+    // nobody. This fork reads it, and defaults to off — one shop, its own
+    // counter, and a server belonging to the project this was forked from.
+    // The opt-in still exists and still works; it is now an actual opt-in.
+    const cloudSyncEnabled = req.body?.cloud_sync_enabled === true;
+    // Normalised whether or not sync is on, so the stored URL is the same
+    // string either way — it used to be normalised only on the enabled path,
+    // which left the raw default (with its trailing slash) in the settings
+    // table for every install that declined. A malformed URL is a malformed
+    // request regardless: the default is never malformed, so this only ever
+    // rejects one somebody actually sent.
+    let normalizedCloudServerUrl: string;
+    try {
+      normalizedCloudServerUrl = normalizeCloudServerUrl(cloud_server_url || DEFAULT_CLOUD_SERVER_URL);
+    } catch {
+      return res.status(400).json({ error: 'Cloud server URL must be a valid HTTPS URL' });
     }
 
     const db = getDatabase();
@@ -933,8 +941,16 @@ router.post('/setup/initialize', (req: Request, res: Response) => {
         service_model: normalizedServiceModel,
         setup_profile: normalizedSetupProfile,
         onboarding_completed: 'true',
-        anonymous_data_consent: 'true',
-        telemetry_enabled: 'true',
+        // Nothing leaves the shop unless somebody switches it on afterwards.
+        //
+        // These were set to 'true' here, which quietly undid migration v63 on
+        // every fresh install: the migration turns the cloud services off, and
+        // then setup turned three of them straight back on. A single shop's
+        // data belongs at its own counter, and the services point at the server
+        // of the project this was forked from — consent that nobody gave is not
+        // consent.
+        anonymous_data_consent: 'false',
+        telemetry_enabled: 'false',
         telemetry_scope: 'usage_stats,country,app_version,platform,session_duration,feature_usage,error_diagnostics',
         // '1'/'0', not 'true'/'false' — mirrors FloAdmin's own `stores` table and
         // matches how cloud-sync.ts reads this key everywhere else.
@@ -942,7 +958,7 @@ router.post('/setup/initialize', (req: Request, res: Response) => {
         cloud_server_url: normalizedCloudServerUrl || DEFAULT_CLOUD_SERVER_URL,
         email_product_updates: email_product_updates === true ? 'true' : 'false',
         email_marketing: email_marketing === true ? 'true' : 'false',
-        cloud_services_disabled_by_user: 'false',
+        cloud_services_disabled_by_user: cloudSyncEnabled ? 'false' : 'true',
       });
 
       seedSetupProfile(db, normalizedSetupProfile, normalizedServiceModel, language, country);

@@ -110,8 +110,12 @@ function main() {
   console.log('   ✓ an old (pre-migration-array) install migrates through to the latest schema without crashing');
 
   const db = getDatabase();
-  assert.equal(db.prepare("SELECT value FROM settings WHERE key = 'cloud_sync_enabled'").get().value, '1',
-    'seed-written cloud sync defaults are flipped on during upgrade');
+  // v40/v41 flips this on, then v63 — the last migration in the chain — turns
+  // it back off for this fork. What matters to a real install is the end state
+  // of the whole chain, and the end state is off: an upgrade must not quietly
+  // start sending a shop's figures to the server this was forked from.
+  assert.equal(db.prepare("SELECT value FROM settings WHERE key = 'cloud_sync_enabled'").get().value, '0',
+    'the migration chain leaves cloud sync off after an upgrade');
   assert.equal(db.prepare("SELECT COUNT(*) AS count FROM settings WHERE key = 'cloud_pending_store_id'").get().count, 0,
     'pending registration state is removed during upgrade');
   assert.equal(db.prepare("SELECT value FROM settings WHERE key = 'cloud_orders_enabled'").get().value, '0',
@@ -120,7 +124,7 @@ function main() {
     'taxes remain off until the merchant enables them');
   assert.ok(db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'support_ticket_outbox'").get(),
     'support ticket outbox exists after upgrade');
-  console.log('   ✓ v40/v41 preserves deliberate settings, flips untouched cloud sync, and creates the support outbox');
+  console.log('   ✓ v40/v41 preserves deliberate settings, v63 leaves the cloud off, and the support outbox exists');
   const ideal = buildIdealSchemaDb();
   const latestSchemaVersion = ideal.pragma('user_version', { simple: true }) as number;
   assert.equal(getCurrentSchemaVersion(), latestSchemaVersion,

@@ -158,10 +158,13 @@ assert.equal(getCurrentSchemaVersion(), MIGRATIONS[MIGRATIONS.length - 1].versio
         setup_profile: 'express',
         service_model: 'qsr',
         terms_accepted: true,
-        // Deliberately sent as false: first-run setup no longer asks about
-        // telemetry, it discloses it. The route must ignore this field
-        // entirely rather than let a stale client switch telemetry off.
-        anonymous_data_consent: false,
+        // Deliberately sent as true: the route must ignore this field entirely.
+        // Upstream ignored it in the other direction — setup disclosed that
+        // telemetry was on and refused to let a stale client switch it off.
+        // This fork ships the cloud services off, so the same rule now has to
+        // hold the other way round: a client asking for consent cannot grant
+        // it on the merchant's behalf.
+        anonymous_data_consent: true,
       }),
     });
 
@@ -178,10 +181,12 @@ assert.equal(getCurrentSchemaVersion(), MIGRATIONS[MIGRATIONS.length - 1].versio
     assert.equal(setting('billing_type'), 'prepaid');
     assert.equal(setting('tables_required'), 'false');
     assert.equal(setting('onboarding_completed'), 'true');
-    assert.equal(setting('anonymous_data_consent'), 'true', 'setup ignores a client-supplied consent field');
-    assert.equal(setting('telemetry_enabled'), 'true', 'telemetry is on by default after setup');
+    assert.equal(setting('anonymous_data_consent'), 'false', 'setup ignores a client-supplied consent field');
+    assert.equal(setting('telemetry_enabled'), 'false', 'telemetry is off after setup — this fork sends nothing out by default');
     assert.equal(setting('telemetry_scope'), 'usage_stats,country,app_version,platform,session_duration,feature_usage,error_diagnostics');
-    assert.equal(setting('diagnostics_consent'), 'true', 'store diagnostics are on by default for a new install');
+    assert.equal(setting('diagnostics_consent'), 'false', 'store diagnostics are off for a new install');
+    assert.equal(setting('cloud_sync_enabled'), '0', 'setup does not re-enable cloud sync over migration v63');
+    assert.equal(setting('cloud_services_disabled_by_user'), 'true');
     assert.equal(profileRefreshes, 1, 'setup immediately refreshes the completed store profile in FloAdmin');
     assert.equal(count('categories'), 2, 'express setup seeds minimal categories');
     assert.equal(count('products'), 4, 'express setup seeds minimal products');
@@ -205,12 +210,14 @@ assert.equal(getCurrentSchemaVersion(), MIGRATIONS[MIGRATIONS.length - 1].versio
     assert.equal(count('users'), 1, 'setup cannot create a second owner');
     console.log('   ✓ setup endpoint is disabled after the first user exists');
 
-    // Cloud v2 coordination is automatic for new installs.
-    // '1', not 'true' — cloud-sync.ts reads this key with a strict '1' check
-    // everywhere, matching FloAdmin's own `stores` table.
-    assert.equal(setting('cloud_sync_enabled'), '1', 'cloud coordination is enabled automatically on v2 setup');
+    // A setup request that says nothing about the cloud gets no cloud. Upstream
+    // enabled coordination automatically here; this fork requires the request
+    // to ask for it (the opt-in is exercised further down).
+    // '1'/'0', not 'true'/'false' — cloud-sync.ts reads this key with a strict
+    // '1' check everywhere, matching FloAdmin's own `stores` table.
+    assert.equal(setting('cloud_sync_enabled'), '0', 'cloud coordination stays off when setup does not ask for it');
     assert.equal(setting('cloud_server_url'), 'https://blue.flopos.com', 'cloud server URL keeps the default');
-    console.log('   ✓ setup endpoint enables cloud coordination automatically');
+    console.log('   ✓ setup endpoint leaves cloud coordination off unless asked');
   } finally {
     cloudSync.refreshRegistrationProfile = originalRefreshRegistrationProfile;
     await new Promise<void>((resolve) => server.close(() => resolve()));

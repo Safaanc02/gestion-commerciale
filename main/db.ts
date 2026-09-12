@@ -3590,6 +3590,44 @@ export const MIGRATIONS: { version: number; name: string; up: () => void }[] = [
                   VALUES ('backup_mirror_path', '', CURRENT_TIMESTAMP)`).run();
     },
   },
+  {
+    version: 63,
+    name: 'no_cloud_services_for_this_shop',
+    up: () => {
+      // Everything this fork sends off the premises, switched off.
+      //
+      // The cloud services point at the server of the project this was forked
+      // from. Reports were leaving for it, and the support screen posted the
+      // shop's name, its machine name and whatever the cashier typed to an
+      // address where nobody was going to read it. A single shop whose data
+      // lives at its own counter should not be shipping any of that to a third
+      // party by inheritance.
+      //
+      // Off by setting rather than by deletion: the code stays, and a shop that
+      // wants it turns it back on knowing what it is turning on.
+      const off = db.prepare(
+        `INSERT INTO settings (key, value, updated_at) VALUES (?, '0', CURRENT_TIMESTAMP)
+         ON CONFLICT(key) DO UPDATE SET value = '0', updated_at = CURRENT_TIMESTAMP`
+      );
+      for (const key of ['cloud_sync_enabled', 'cloud_orders_enabled', 'cloud_reports_enabled',
+                         'cloud_command_polling_enabled']) {
+        off.run(key);
+      }
+      const offText = db.prepare(
+        `INSERT INTO settings (key, value, updated_at) VALUES (?, 'false', CURRENT_TIMESTAMP)
+         ON CONFLICT(key) DO UPDATE SET value = 'false', updated_at = CURRENT_TIMESTAMP`
+      );
+      for (const key of ['diagnostics_consent', 'telemetry_enabled', 'anonymous_data_consent',
+                         'cloud_connected']) {
+        offText.run(key);
+      }
+      db.prepare(
+        `INSERT INTO settings (key, value, updated_at)
+         VALUES ('cloud_services_disabled_by_user', 'true', CURRENT_TIMESTAMP)
+         ON CONFLICT(key) DO UPDATE SET value = 'true', updated_at = CURRENT_TIMESTAMP`
+      ).run();
+    },
+  },
 ];
 
 function syncBackupBeforeMigration(fromVersion: number, toVersion: number): void {
@@ -4278,14 +4316,17 @@ function seedCloudSyncDefaults(): void {
   const serverUrl = getSettingValue('cloud_server_url');
   if (!serverUrl) upsertSetting('cloud_server_url', DEFAULT_CLOUD_SERVER_URL);
 
-  // Mirrors FloAdmin's own `stores` table defaults (sync + reports on, orders off —
-  // see specs/floadmin.md § api surface). Harmless pre-claim: every send path in
-  // cloud-sync.ts is gated on api_key being present, which only exists after a
-  // human claims the store on FloAdmin, so nothing transmits before then.
-  insertSettingIfMissing('cloud_sync_enabled', '1');
+  // Upstream mirrored FloAdmin's own `stores` defaults here (sync + reports on).
+  // This fork ships them off: it serves one shop, on its own counter, and the
+  // server these point at belongs to the project it was forked from. Nothing
+  // would transmit before a human claims the store there anyway — every send
+  // path is gated on api_key — but a switch that is on and waiting is not the
+  // same as a switch that is off. Migration v63 does this for installs that
+  // already exist; these two lines are the same decision for new ones.
+  insertSettingIfMissing('cloud_sync_enabled', '0');
   insertSettingIfMissing('cloud_orders_enabled', '0');
-  insertSettingIfMissing('cloud_reports_enabled', '1');
-  insertSettingIfMissing('cloud_command_polling_enabled', '1');
+  insertSettingIfMissing('cloud_reports_enabled', '0');
+  insertSettingIfMissing('cloud_command_polling_enabled', '0');
   insertSettingIfMissing('cloud_connected', 'false');
   insertSettingIfMissing('cloud_registration_status', 'unregistered');
 
@@ -4342,15 +4383,20 @@ function seedInstallDefaults(): void {
   insert('setup_profile', '');
   insert('cloud_server_url', DEFAULT_CLOUD_SERVER_URL);
   insert('cloud_connected', 'false');
-  insert('cloud_sync_enabled', '1');
+  // Off, for the reason spelled out in seedCloudSyncDefaults() and migration
+  // v63. The scope string stays as-is: it describes what telemetry *would*
+  // carry if someone switched it on, and hiding that list would not make the
+  // choice better informed.
+  insert('cloud_sync_enabled', '0');
   insert('cloud_orders_enabled', '0');
-  insert('cloud_reports_enabled', '1');
-  insert('cloud_command_polling_enabled', '1');
+  insert('cloud_reports_enabled', '0');
+  insert('cloud_command_polling_enabled', '0');
   insert('cloud_registration_status', 'unregistered');
-  insert('anonymous_data_consent', 'true');
-  insert('telemetry_enabled', 'true');
+  insert('anonymous_data_consent', 'false');
+  insert('telemetry_enabled', 'false');
   insert('telemetry_scope', 'usage_stats,country,app_version,platform,session_duration,feature_usage,error_diagnostics');
-  insert('diagnostics_consent', 'true');
+  insert('diagnostics_consent', 'false');
+  insert('cloud_services_disabled_by_user', 'true');
   insert('kds_enabled', 'true');
   insert('kot_printing_enabled', 'true');
   insert('order_number_prefix', 'ORD');
