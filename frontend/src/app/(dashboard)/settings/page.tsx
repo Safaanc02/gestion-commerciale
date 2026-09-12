@@ -17,6 +17,7 @@ import { COUNTRIES, countryName } from '@/lib/countries';
 import { dialCodeFor } from '@/lib/phone';
 import { useConfirm } from '@/hooks/use-confirm';
 import { MasterPinPrompt } from '@/components/settings/MasterPinPrompt';
+import ArabicPrintingCard from '@/components/settings/ArabicPrintingCard';
 import { HealthCheckDialog } from '@/components/settings/HealthCheckDialog';
 import { InitializeDatabaseDialog } from '@/components/settings/InitializeDatabaseDialog';
 import { WhatsAppEnableCard } from '@/components/settings/WhatsAppEnableCard';
@@ -3240,6 +3241,10 @@ export default function SettingsPage() {
                       className="h-5 w-9 shrink-0 accent-[color:var(--color-brand)]"
                     />
                   </label>
+
+                  <div className="mt-4">
+                    <ArabicPrintingCard />
+                  </div>
                 </div>
               </div>
             </div>

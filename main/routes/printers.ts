@@ -1,7 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { getDatabase, now, attachEffectiveAddons, isKotPrintingEnabled, parseItemJson } from '../db';
 import { v4 as uuidv4 } from 'uuid';
-import { printViaNetwork, printViaUSB, buildTestPage, printReceiptDetailed, printKOTDetailed, detectConnectedPrinters } from '../printers/thermal';
+import { printViaNetwork, printViaUSB, buildTestPage, printReceiptDetailed, printKOTDetailed, detectConnectedPrinters, printArabicTestPage } from '../printers/thermal';
 import { getSupportedPrinterProfiles, resolvePrinterProfile } from '../printers/profiles';
 import { requireRole } from '../middleware/security';
 
@@ -252,6 +252,26 @@ router.post('/:id/set-default', requireRole('owner', 'manager'), (req: Request, 
   } catch (error: any) {
     console.error("[API] Internal error:", error);
     res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+/**
+ * POST /api/printers/arabic-test — print the Arabic code-page test page.
+ *
+ * Reachable from the settings screen because it has to be: the shop's till is
+ * a packaged Windows application with no repository and no Node beside it, and
+ * the code page it needs cannot be discovered any other way than by looking at
+ * paper. Leaving this as a script would have left 3318 of the shop's 3661
+ * products unprintable with no way to fix it from the counter.
+ */
+router.post('/arabic-test', requireRole('owner', 'manager'), async (_req: Request, res: Response) => {
+  try {
+    const result = await printArabicTestPage();
+    if (result.ok) return res.json({ success: true });
+    return res.status(400).json({ error: result.detail || 'The printer did not respond' });
+  } catch (error: any) {
+    console.error('[API] Internal error:', error);
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 

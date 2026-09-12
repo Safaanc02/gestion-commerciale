@@ -352,6 +352,43 @@ router.get('/scale', requireRole('owner', 'manager', 'cashier', 'waiter'), (_req
   }
 });
 
+/**
+ * PUT /api/settings/arabic-printing — which Arabic code page the printer wants.
+ *
+ * Only ever set from what came out on paper. No command asks a thermal printer
+ * which tables it knows, so the shop prints the test page, reads the line that
+ * is legible, and records it here. Validated rather than trusted: an unknown
+ * code page would send Arabic bytes to a printer that is not in an Arabic mode,
+ * which prints worse rubbish than the plain-Latin line it replaces.
+ */
+router.put('/arabic-printing', requireRole('owner', 'manager'), (req: Request, res: Response) => {
+  try {
+    const { codepage, charset_id } = req.body ?? {};
+    if (!['none', 'cp864', 'cp1256'].includes(codepage)) {
+      return res.status(400).json({ error: 'codepage must be none, cp864 or cp1256' });
+    }
+    const id = Number(charset_id);
+    if (codepage !== 'none' && (!Number.isInteger(id) || id < 0 || id > 255)) {
+      return res.status(400).json({ error: 'charset_id must be a whole number between 0 and 255' });
+    }
+
+    const db = getDatabase();
+    const write = db.prepare(
+      `INSERT INTO settings (key, value, updated_at) VALUES (?, ?, CURRENT_TIMESTAMP)
+       ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = CURRENT_TIMESTAMP`
+    );
+    db.transaction(() => {
+      write.run('printer_arabic_codepage', codepage);
+      if (codepage !== 'none') write.run('printer_arabic_charset_id', String(id));
+    })();
+
+    res.json({ codepage, charset_id: codepage === 'none' ? null : id });
+  } catch (error: any) {
+    console.error('[API] Internal error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 router.put('/scale', requireRole('owner', 'manager'), (req: Request, res: Response) => {
   try {
     const { enabled, format } = req.body ?? {};
